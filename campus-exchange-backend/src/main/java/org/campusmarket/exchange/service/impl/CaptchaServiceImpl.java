@@ -66,22 +66,29 @@ public class CaptchaServiceImpl implements ICaptchaService {
     
     @Override
     public boolean validateCaptcha(String captchaId, String captchaCode) {
+        // 添加调试日志
+        System.out.println("验证码校验: captchaId=" + captchaId + ", captchaCode=" + captchaCode);
+        
         if (captchaId == null || captchaCode == null) {
+            System.out.println("验证码ID或验证码为空");
             return false;
         }
         
         CaptchaRecord record = captchaRecordMapper.selectByCaptchaId(captchaId);
         if (record == null) {
+            System.out.println("未找到验证码记录: " + captchaId);
             return false;
         }
         
         // 验证码过期或已使用
         if (record.getExpiredTime().isBefore(LocalDateTime.now()) || Boolean.TRUE.equals(record.getIsUsed())) {
+            System.out.println("验证码已过期或已使用: 过期时间=" + record.getExpiredTime() + ", 是否已使用=" + record.getIsUsed());
             return false;
         }
         
         // 验证码不区分大小写
         boolean isValid = captchaCode.equalsIgnoreCase(record.getCaptchaCode());
+        System.out.println("验证码比对: 输入=" + captchaCode + ", 实际=" + record.getCaptchaCode() + ", 是否有效=" + isValid);
         
         if (isValid) {
             // 标记验证码已使用

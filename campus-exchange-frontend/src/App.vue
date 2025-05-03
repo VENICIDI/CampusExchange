@@ -1,47 +1,90 @@
-<script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-
-interface User {
-  userId?: number;
-  username: string;
-  role: string;
-  avatar?: string;
-}
+<script setup>
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
+const route = useRoute()
 const currentYear = new Date().getFullYear()
-const user = ref<User | null>(null)
+const user = ref(null)
+
+// 计算属性：当前是否在登录/注册页面
+const isAuthPage = computed(() => {
+  return route.path === '/login' || route.path === '/register'
+})
 
 // 计算属性：用户是否已登录
 const isLoggedIn = computed(() => {
-  return user.value !== null
+  const loggedIn = user.value !== null && user.value !== undefined;
+  console.log('用户登录状态:', loggedIn, user.value);
+  return loggedIn;
 })
 
 // 从本地存储获取用户信息
 const getUserFromStorage = () => {
-  const userJson = localStorage.getItem('user')
+  console.log('尝试获取本地存储的用户信息');
+  const userJson = localStorage.getItem('user');
+  console.log('获取到的用户JSON:', userJson);
+  
   if (userJson) {
     try {
-      const userData = JSON.parse(userJson)
-      user.value = userData
+      const userData = JSON.parse(userJson);
+      console.log('解析后的用户数据:', userData);
+      user.value = userData;
+      console.log('成功加载用户数据, user.value:', user.value);
     } catch (e) {
-      console.error('解析用户数据失败:', e)
-      localStorage.removeItem('user')
+      console.error('解析用户数据失败:', e);
+      localStorage.removeItem('user');
     }
+  } else {
+    console.log('本地存储中没有找到用户数据');
+    user.value = null;
   }
 }
 
 // 处理退出登录
 const handleLogout = () => {
-  localStorage.removeItem('user')
-  user.value = null
-  router.push('/login')
+  // 清除localStorage
+  localStorage.removeItem('user');
+  // 重置用户状态
+  user.value = null;
+  console.log('用户已退出登录');
+  
+  // 触发storage事件，确保所有组件感知到登出状态
+  setTimeout(() => {
+    window.dispatchEvent(new Event('storage'));
+    console.log('已触发storage事件，通知组件用户已登出');
+    // 导航到登录页
+    router.push('/login');
+  }, 50);
 }
 
-// 组件挂载时获取用户信息
+// 游客模式，跳转到首页
+const handleGuestMode = () => {
+  router.push('/');
+}
+
+// 监听localStorage的变化
+const handleStorageChange = (event) => {
+  console.log('检测到storage变化:', event);
+  getUserFromStorage();
+}
+
+// 监听路由变化
+watch(() => route.path, (newPath) => {
+  console.log('路由变化:', newPath);
+}, { immediate: true });
+
+// 组件挂载时获取用户信息并添加监听器
 onMounted(() => {
-  getUserFromStorage()
+  getUserFromStorage();
+  
+  // 监听storage事件，即使是在同一个窗口触发的自定义事件
+  window.addEventListener('storage', handleStorageChange);
+})
+
+// 组件卸载时移除监听器
+onUnmounted(() => {
+  window.removeEventListener('storage', handleStorageChange);
 })
 </script>
 
@@ -59,8 +102,16 @@ onMounted(() => {
       
       <div class="auth-links">
         <template v-if="isLoggedIn">
-          <span class="welcome-text">欢迎，{{ user?.username }}</span>
+          <span class="welcome-text">欢迎，{{ user.username }}</span>
           <a href="#" @click.prevent="handleLogout" class="auth-link">退出</a>
+        </template>
+        <template v-else-if="isAuthPage">
+          <div class="guest-mode">
+            <router-link to="/" class="guest-btn">
+              <span class="guest-icon">👋</span>
+              <span>游客访问</span>
+            </router-link>
+          </div>
         </template>
         <template v-else>
           <router-link to="/login" class="auth-link">登录</router-link>
@@ -83,11 +134,13 @@ onMounted(() => {
 
 <style scoped>
 .header {
-  background-color: #ffffff;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all 0.3s ease;
+  border-bottom: 2px solid #f0f0f0;
 }
 
 .container {
@@ -107,27 +160,58 @@ onMounted(() => {
 .logo a {
   color: #4a6ee0;
   text-decoration: none;
-  font-size: 20px;
+  font-size: 22px;
   font-weight: 700;
+  transition: color 0.3s ease;
+  letter-spacing: 0.5px;
+  display: flex;
+  align-items: center;
+}
+
+.logo a:before {
+  content: "🔄";
+  margin-right: 8px;
+  font-size: 24px;
+}
+
+.logo a:hover {
+  color: #304b99;
 }
 
 .nav {
   display: flex;
-  gap: 20px;
+  gap: 24px;
 }
 
 .nav-link {
   color: #333;
   text-decoration: none;
-  font-weight: 500;
+  font-weight: 600;
   font-size: 16px;
   padding: 5px 0;
-  transition: color 0.3s;
+  transition: all 0.3s ease;
+  position: relative;
+}
+
+.nav-link:after {
+  content: "";
+  position: absolute;
+  width: 0;
+  height: 2px;
+  bottom: 0;
+  left: 0;
+  background-color: #4a6ee0;
+  transition: width 0.3s ease;
 }
 
 .nav-link:hover,
 .nav-link.router-link-active {
   color: #4a6ee0;
+}
+
+.nav-link:hover:after,
+.nav-link.router-link-active:after {
+  width: 100%;
 }
 
 .auth-links {
@@ -140,43 +224,102 @@ onMounted(() => {
   color: #555;
   font-size: 14px;
   margin-right: 5px;
+  font-weight: 500;
 }
 
 .auth-link {
   color: #4a6ee0;
   text-decoration: none;
   font-size: 14px;
-  font-weight: 500;
-  transition: color 0.3s;
+  font-weight: 600;
+  transition: all 0.3s ease;
 }
 
 .auth-link:hover {
-  color: #3a5cc5;
+  color: #304b99;
+  transform: translateY(-1px);
 }
 
 .register-link {
   padding: 8px 16px;
   background-color: #4a6ee0;
   color: #fff;
-  border-radius: 4px;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(74, 110, 224, 0.3);
+  transition: all 0.3s ease;
 }
 
 .register-link:hover {
-  background-color: #3a5cc5;
+  background-color: #304b99;
   color: #fff;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(74, 110, 224, 0.4);
 }
 
 .main {
   min-height: calc(100vh - 170px);
   width: 100%;
+  background-color: #f8f9fa;
 }
 
 .footer {
-  background-color: #f5f5f5;
-  padding: 20px 0;
+  background-color: #f0f4ff;
+  padding: 25px 0;
   text-align: center;
   color: #666;
   font-size: 14px;
   margin-top: 30px;
+  border-top: 1px solid #e0e6f7;
+}
+
+.guest-mode {
+  display: flex;
+  align-items: center;
+}
+
+.guest-btn {
+  display: flex;
+  align-items: center;
+  padding: 8px 16px;
+  background-color: #f0f4ff;
+  color: #4a6ee0;
+  border-radius: 8px;
+  border: 1px solid #e0e6f7;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  font-weight: 500;
+  font-size: 14px;
+  box-shadow: 0 2px 6px rgba(74, 110, 224, 0.15);
+}
+
+.guest-btn:hover {
+  background-color: #e6ecff;
+  color: #3d5eca;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(74, 110, 224, 0.2);
+}
+
+.guest-icon {
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .header-container {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 15px 0;
+  }
+  
+  .nav {
+    order: 3;
+    width: 100%;
+    margin-top: 15px;
+    justify-content: center;
+  }
+  
+  .auth-links {
+    margin-left: auto;
+  }
 }
 </style>
