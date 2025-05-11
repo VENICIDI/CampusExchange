@@ -11,6 +11,6 @@ import org.campusmarket.exchange.entity.CaptchaRecord;
 public interface CaptchaRecordMapper extends BaseMapper<CaptchaRecord> {
     
     // 根据验证码ID查询验证码记录
-    @Select("SELECT * FROM captcha_record WHERE captcha_id = #{captchaId}")
+    @Select("SELECT * FROM image_captcha WHERE id = #{captchaId}")
     CaptchaRecord selectByCaptchaId(@Param("captchaId") String captchaId);
 } 

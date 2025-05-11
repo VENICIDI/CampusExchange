@@ -25,19 +25,72 @@ public class UserController {
      * 获取当前用户信息
      */
     @GetMapping("/current")
-    public Result<User> getCurrentUser() {
-        // 实际应该从Spring Security获取当前登录用户信息
-        return Result.error(400, "暂未实现");
+    public Result<User> getCurrentUser(@RequestHeader(value = "X-User-Id", required = false) String userId,
+                                      @RequestHeader(value = "X-User-Name", required = false) String username) {
+        if (userId != null && username != null) {
+            User user = new User();
+            try {
+                user.setId(Long.parseLong(userId));
+            } catch (NumberFormatException e) {
+                user.setId(0L);
+            }
+            user.setUsername(username);
+            user.setStatus(UserStatusEnum.NORMAL);
+            return Result.success(user);
+        }
+        return Result.error(401, "未登录");
+    }
+    
+    /**
+     * 获取用户个人资料
+     */
+    @GetMapping("/profile")
+    public Result<User> getUserProfile(@RequestHeader(value = "X-User-Id", required = false) String userId) {
+        if (userId != null) {
+            try {
+                long userIdLong = Long.parseLong(userId);
+                User user = userService.getUserById(userIdLong);
+                if (user != null) {
+                    // 出于安全考虑，清除敏感信息
+                    user.setPassword(null);
+                    return Result.success(user);
+                }
+                return Result.error(404, "用户不存在");
+            } catch (NumberFormatException e) {
+                return Result.error(400, "无效的用户ID");
+            }
+        }
+        return Result.error(401, "未登录");
     }
     
     /**
      * 更新用户个人信息
      */
     @PutMapping("/profile")
-    public Result<?> updateUserProfile(@RequestBody User user) {
-        // 实际应该从Spring Security获取当前登录用户ID，并限制只能修改自己的信息
-        boolean success = userService.updateUser(user);
-        return success ? Result.success(null, "更新成功") : Result.error(400, "更新失败");
+    public Result<?> updateUserProfile(@RequestBody User user, @RequestHeader(value = "X-User-Id", required = false) String userId) {
+        if (userId == null) {
+            return Result.error(401, "未登录");
+        }
+        
+        try {
+            long userIdLong = Long.parseLong(userId);
+            // 确保只能修改自己的信息，并防止恶意修改ID
+            user.setId(userIdLong);
+            
+            System.out.println("更新用户资料，用户ID: " + userIdLong + ", 头像URL: " + user.getAvatar());
+            boolean success = userService.updateUser(user);
+            
+            if (success) {
+                // 获取更新后的用户信息
+                User updatedUser = userService.getUserById(userIdLong);
+                System.out.println("用户资料更新成功，更新后的头像URL: " + (updatedUser != null ? updatedUser.getAvatar() : "null"));
+                return Result.success("更新成功", updatedUser);
+            } else {
+                return Result.error(400, "更新失败");
+            }
+        } catch (NumberFormatException e) {
+            return Result.error(400, "无效的用户ID");
+        }
     }
     
     /**

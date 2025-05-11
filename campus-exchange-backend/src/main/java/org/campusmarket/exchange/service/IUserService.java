@@ -15,6 +15,9 @@ public interface IUserService {
     // 处理用户注册（包括普通用户和商家）
     Long register(UserRegisterDTO registerDTO);
     
+    // 通过ID查询用户
+    User getUserById(Long userId);
+    
     // 通过用户名查询用户
     User getUserByUsername(String username);
     

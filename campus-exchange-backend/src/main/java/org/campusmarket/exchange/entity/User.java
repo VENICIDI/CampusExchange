@@ -39,7 +39,7 @@ public class User {
     // 城市
     private String city;
 
-    // 性别：FEMALE-女，MALE-男
+    // 性别：FEMALE-女，MALE-男, UNKNOWN-未知
     private GenderEnum gender;
 
     // 银行账号
@@ -53,6 +53,9 @@ public class User {
 
     // 状态：PENDING-待审核，NORMAL-正常，DISABLED-禁用
     private UserStatusEnum status;
+    
+    // 默认收货地址
+    private String defaultAddress;
 
     // 个人介绍
     private String personalIntro;

@@ -8,6 +8,7 @@ import org.campusmarket.exchange.dto.LoginRequestDTO;
 import org.campusmarket.exchange.dto.LoginResponseDTO;
 import org.campusmarket.exchange.dto.Result;
 import org.campusmarket.exchange.dto.UserRegisterDTO;
+import org.campusmarket.exchange.entity.User;
 // --- 确保导入 BusinessException ---
 import org.campusmarket.exchange.exception.BusinessException;
 // --- 导入结束 ---
@@ -134,15 +135,27 @@ public class AuthController {
         // 3. 认证成功处理
         SecurityContextHolder.getContext().setAuthentication(authentication);
 
+        // 从认证对象中获取用户名
+        String username = authentication.getName();
+        
+        // 查询数据库获取完整用户信息
+        User user = userService.getUserByUsername(username);
+        if (user == null) {
+            throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "系统错误：无法获取用户信息");
+        }
+
         LoginResponseDTO response = new LoginResponseDTO();
-        response.setUsername(authentication.getName());
+        response.setUserId(user.getId()); // 设置用户ID
+        response.setUsername(username);
+        response.setAvatar(user.getAvatar()); // 设置头像
+        
         String role = authentication.getAuthorities().stream()
                 .findFirst()
                 .map(authority -> authority.getAuthority().replace("ROLE_", ""))
                 .orElse("USER");
         response.setRole(role);
 
-        System.out.println("登录成功: username=" + authentication.getName() + ", role=" + role);
+        System.out.println("登录成功: username=" + username + ", userId=" + user.getId() + ", role=" + role);
         // 认证成功，返回 200 OK
         return Result.success("登录成功", response);
     }

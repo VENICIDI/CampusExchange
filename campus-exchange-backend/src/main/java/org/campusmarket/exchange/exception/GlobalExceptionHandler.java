@@ -32,7 +32,7 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<?> handleBusinessException(BusinessException e) {
-        logger.error("业务异常: {}", e.getMessage());
+        logger.error("业务异常: {}", e.getMessage(), e);
         return Result.error(e.getCode(), e.getMessage());
     }
 
@@ -83,7 +83,8 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(Exception.class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     public Result<?> handleException(Exception e) {
-        logger.error("系统异常", e);
-        return Result.error(500, "系统异常，请联系管理员");
+        logger.error("系统异常: {}", e.getMessage(), e);
+        // 在开发环境下返回详细错误信息
+        return Result.error(500, "系统异常: " + e.getMessage());
     }
 }

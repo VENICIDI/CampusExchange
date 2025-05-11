@@ -78,6 +78,16 @@ public class SecurityConfig {
                         .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/captcha", "/api/auth/captcha/**","/index.html").permitAll()
                         // 新增：允许访问根路径 '/'
                         .requestMatchers("/").permitAll()
+                        // 允许匿名访问商品和分类相关API
+                        .requestMatchers("/api/products/**", "/api/categories/**", "/api/static/**").permitAll()
+                        // 允许匿名访问商家相关API
+                        .requestMatchers("/api/merchants/**").permitAll()
+                        // 文件上传相关API匿名访问
+                        .requestMatchers("/api/upload/**", "/api/files/**").permitAll()
+                        // 允许获取当前用户信息
+                        .requestMatchers("/api/users/current").permitAll()
+                        // 允许访问用户个人资料API
+                        .requestMatchers("/api/users/profile", "/api/users/profile/**").permitAll()
                         // 其他请求需要认证 (确保这行在最后)
                         .anyRequest().authenticated()
                 )

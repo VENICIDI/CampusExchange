@@ -29,16 +29,28 @@ const getUserFromStorage = () => {
     try {
       const userData = JSON.parse(userJson);
       console.log('解析后的用户数据:', userData);
-      user.value = userData;
-      console.log('成功加载用户数据, user.value:', user.value);
+      
+      // 验证用户数据有效性
+      if (userData && userData.userId && userData.username) {
+        user.value = userData;
+        console.log('成功加载用户数据, user.value:', user.value);
+      } else {
+        console.error('用户数据无效，缺少必要字段');
+        localStorage.removeItem('user');
+        user.value = null;
+      }
     } catch (e) {
       console.error('解析用户数据失败:', e);
       localStorage.removeItem('user');
+      user.value = null;
     }
   } else {
     console.log('本地存储中没有找到用户数据');
     user.value = null;
   }
+
+  // 打印最终结果，确认用户状态
+  console.log('最终用户状态:', user.value ? `已登录: ${user.value.username}` : '未登录');
 }
 
 // 处理退出登录
@@ -72,6 +84,8 @@ const handleStorageChange = (event) => {
 // 监听路由变化
 watch(() => route.path, (newPath) => {
   console.log('路由变化:', newPath);
+  // 当路由改变时，也更新一次用户状态，确保页面显示正确
+  getUserFromStorage();
 }, { immediate: true });
 
 // 组件挂载时获取用户信息并添加监听器
@@ -80,11 +94,15 @@ onMounted(() => {
   
   // 监听storage事件，即使是在同一个窗口触发的自定义事件
   window.addEventListener('storage', handleStorageChange);
+  
+  // 添加一个自定义事件监听器，用于登录成功后更新用户状态
+  window.addEventListener('user-login', getUserFromStorage);
 })
 
 // 组件卸载时移除监听器
 onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange);
+  window.removeEventListener('user-login', getUserFromStorage);
 })
 </script>
 
@@ -96,14 +114,22 @@ onUnmounted(() => {
       </h1>
       
       <nav class="nav">
-        <router-link to="/" class="nav-link">首页</router-link>
+        <router-link :to="isLoggedIn && user.role === 'MERCHANT' ? '/merchant' : '/'" class="nav-link">首页</router-link>
+        <router-link v-if="isLoggedIn" :to="user.role === 'MERCHANT' ? '/orders/merchant' : '/orders/user'" class="nav-link">我的订单</router-link>
+        <router-link v-if="isLoggedIn && user.role === 'MERCHANT'" to="/product/publish" class="nav-link">发布商品</router-link>
         <router-link to="/about" class="nav-link">关于</router-link>
       </nav>
       
       <div class="auth-links">
         <template v-if="isLoggedIn">
-          <span class="welcome-text">欢迎，{{ user.username }}</span>
-          <a href="#" @click.prevent="handleLogout" class="auth-link">退出</a>
+          <div class="user-menu">
+            <span class="welcome-text">欢迎，{{ user.username }}</span>
+            <div class="role-switcher" v-if="user.role === 'MERCHANT'">
+              <router-link to="/" class="role-link" :class="{ 'router-link-active': $route.path === '/' }">买家首页</router-link>
+              <router-link to="/merchant" class="role-link" :class="{ 'router-link-active': $route.path === '/merchant' }">商家中心</router-link>
+            </div>
+            <a href="#" @click.prevent="handleLogout" class="auth-link">退出</a>
+          </div>
         </template>
         <template v-else-if="isAuthPage">
           <div class="guest-mode">
@@ -321,5 +347,35 @@ onUnmounted(() => {
   .auth-links {
     margin-left: auto;
   }
+}
+
+/* 添加用户菜单和角色切换样式 */
+.user-menu {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.role-switcher {
+  display: flex;
+  background-color: #f0f2f7;
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.role-link {
+  padding: 5px 10px;
+  text-decoration: none;
+  color: #555;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.role-link:hover,
+.role-link.router-link-active {
+  background-color: #4a6ee0;
+  color: #ffffff;
 }
 </style>

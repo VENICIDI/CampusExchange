@@ -4,9 +4,7 @@ import com.baomidou.mybatisplus.annotation.EnumValue;
 import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
-/**
- * 支付方式枚举
- */
+// 支付方式枚举
 @Getter
 public enum PaymentMethodEnum {
     

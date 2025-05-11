@@ -293,9 +293,14 @@ const handleLogin = async () => {
       // 提取用户数据
       const responseData = response.data.data;
       
+      // 验证userId有效性
+      if (!responseData.userId || responseData.userId <= 0) {
+        throw new Error('登录失败：服务器返回的用户ID无效 (ID: ' + (responseData.userId || 'undefined') + ')');
+      }
+      
       // 保存用户信息到本地存储
       const userData = {
-        userId: responseData.userId || 0,
+        userId: responseData.userId,
         username: responseData.username || '用户',
         role: responseData.role || 'USER',
         avatar: responseData.avatar || ''
@@ -304,19 +309,32 @@ const handleLogin = async () => {
       console.log('保存用户数据到本地存储:', userData);
       localStorage.setItem('user', JSON.stringify(userData));
       
+      // 触发用户登录事件，通知App.vue更新用户状态
+      window.dispatchEvent(new Event('user-login'));
+      window.dispatchEvent(new Event('storage'));
+      console.log('已触发user-login和storage事件，通知App.vue更新用户状态');
+      
       // 提示用户登录成功
       const successMessage = response.data.message || '登录成功';
       console.log(successMessage);
       
       // 根据用户角色跳转到不同页面
-      if (userData.role === 'ADMIN') {
-        router.push('/admin');
-      } else if (userData.role === 'MERCHANT') {
-        router.push('/merchant');
+      console.log('根据用户角色跳转:', userData.role);
+      
+      // 检查是否有重定向页面
+      const redirectPath = router.currentRoute.value.query.redirect;
+      
+      // 如果有重定向路径，且用户角色允许访问该路径，则跳转到该路径
+      if (redirectPath) {
+        console.log('有重定向路径:', redirectPath);
+        router.push(redirectPath).catch(err => {
+          console.error('重定向跳转失败:', err);
+          // 如果重定向失败，回退到基于角色的默认跳转
+          redirectBasedOnRole(userData.role);
+        });
       } else {
-        // 查看是否有重定向页面
-        const redirectPath = router.currentRoute.value.query.redirect;
-        router.push(redirectPath || '/');
+        // 没有重定向路径，根据角色进行默认跳转
+        redirectBasedOnRole(userData.role);
       }
     } else {
       throw new Error('登录响应数据异常');
@@ -377,6 +395,20 @@ const handleLogin = async () => {
     isSubmitting.value = false;
   }
 };
+
+// 根据角色跳转到对应页面
+function redirectBasedOnRole(role) {
+  if (role === 'ADMIN') {
+    console.log('管理员登录，跳转到管理后台');
+    router.push('/admin');
+  } else if (role === 'MERCHANT') {
+    console.log('商家登录，跳转到商家中心');
+    router.push('/merchant');
+  } else {
+    console.log('普通用户登录，跳转到首页');
+    router.push('/');
+  }
+}
 
 // 组件挂载时获取验证码
 onMounted(() => {
