@@ -5,6 +5,7 @@ import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
+import org.campusmarket.exchange.enums.TradeTypeEnum;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -46,13 +47,28 @@ public class Order {
     private OrderStatusEnum status;
     
     // 交易方式：EXPRESS-快递，OFFLINE-线下交易
-    private String tradeType;
+    private TradeTypeEnum tradeType;
     
     // 线下交易地点
     private String offlineMeetingLocation;
     
     // 线下交易时间
     private LocalDateTime offlineMeetingTime;
+    
+    // 收货人姓名
+    private String receiverName;
+    
+    // 收货人手机号
+    private String receiverPhone;
+    
+    // 收货地址
+    private String receiverAddress;
+    
+    // 快递公司
+    private String expressCompany;
+    
+    // 快递单号
+    private String trackingNo;
     
     // 支付时间 (模拟)
     private LocalDateTime paymentTime;

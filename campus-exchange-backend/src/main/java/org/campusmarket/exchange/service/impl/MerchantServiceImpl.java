@@ -106,72 +106,93 @@ public class MerchantServiceImpl extends ServiceImpl<MerchantMapper, Merchant> i
     public MerchantProfileVO getMerchantProfile(Long merchantId) {
         log.info("获取商家[{}]主页聚合信息", merchantId);
         
-        // 1. 查询商家基础信息
-        Merchant merchant = merchantMapper.selectById(merchantId);
-        if (merchant == null) {
-            log.error("商家不存在: {}", merchantId);
-            return null;
-        }
-        
-        MerchantProfileVO profileVO = new MerchantProfileVO();
-        profileVO.setMerchantId(merchant.getId());
-        profileVO.setStoreName(merchant.getStoreName());
-        profileVO.setDescription(merchant.getDescription());
-        profileVO.setStorePositiveRate(merchant.getStorePositiveRate());
-        profileVO.setTotalSalesCount(merchant.getTotalSalesCount());
-        profileVO.setTotalSalesAmount(merchant.getTotalSalesAmount());
-        profileVO.setLevelId(merchant.getLevelId());
-        profileVO.setCreateTime(merchant.getCreateTime());
-        
-        // 2. 查询用户信息（头像、联系方式）
-        User user = userMapper.selectById(merchant.getUserId());
-        if (user != null) {
-            profileVO.setAvatar(user.getAvatar());
-            profileVO.setPhone(user.getPhone());
-            profileVO.setEmail(user.getEmail());
-            profileVO.setWechat(user.getWechat());
-        }
-        
-        // 3. 查询商家等级信息
-        MerchantLevel level = merchantLevelMapper.selectById(merchant.getLevelId());
-        if (level != null) {
-            profileVO.setLevelName(level.getLevelName());
-            profileVO.setLevelDesc(level.getDescription());
-            profileVO.setCommissionRate(level.getCommissionRate());
-        }
-        
-        // 4. 查询商家在售商品（限制展示10条）
-        List<ProductVO> products = productService.getMerchantProducts(merchantId, ProductStatusEnum.ON_SALE);
-        if (products.size() > 10) {
-            products = products.subList(0, 10);
-        }
-        profileVO.setProducts(products);
-        
-        // 5. 查询商家服务评价（限制展示5条）
-        List<MerchantServiceReview> reviews = merchantServiceReviewMapper.selectByMerchantId(merchantId, 5);
-        if (reviews != null && !reviews.isEmpty()) {
-            List<MerchantProfileVO.MerchantServiceReviewVO> reviewVOs = new ArrayList<>();
-            
-            for (MerchantServiceReview review : reviews) {
-                MerchantProfileVO.MerchantServiceReviewVO reviewVO = new MerchantProfileVO.MerchantServiceReviewVO();
-                reviewVO.setId(review.getId());
-                reviewVO.setUserId(review.getUserId());
-                reviewVO.setServiceAttitudeRating(review.getServiceAttitudeRating());
-                reviewVO.setContent(review.getContent());
-                reviewVO.setCreateTime(review.getCreateTime());
-                
-                // 查询评价用户名称
-                User reviewer = userMapper.selectById(review.getUserId());
-                if (reviewer != null) {
-                    reviewVO.setUsername(reviewer.getUsername());
-                }
-                
-                reviewVOs.add(reviewVO);
+        try {
+            // 1. 查询商家基础信息
+            Merchant merchant = merchantMapper.selectById(merchantId);
+            if (merchant == null) {
+                log.error("商家不存在: {}", merchantId);
+                return null;
             }
             
-            profileVO.setReviews(reviewVOs);
+            MerchantProfileVO profileVO = new MerchantProfileVO();
+            profileVO.setMerchantId(merchant.getId());
+            profileVO.setStoreName(merchant.getStoreName());
+            profileVO.setDescription(merchant.getDescription());
+            profileVO.setStorePositiveRate(merchant.getStorePositiveRate());
+            profileVO.setTotalSalesCount(merchant.getTotalSalesCount());
+            profileVO.setTotalSalesAmount(merchant.getTotalSalesAmount());
+            profileVO.setLevelId(merchant.getLevelId());
+            profileVO.setCreateTime(merchant.getCreateTime());
+            
+            // 2. 查询用户信息（头像、联系方式）
+            try {
+                User user = userMapper.selectById(merchant.getUserId());
+                if (user != null) {
+                    profileVO.setAvatar(user.getAvatar());
+                    profileVO.setPhone(user.getPhone());
+                    profileVO.setEmail(user.getEmail());
+                    profileVO.setWechat(user.getWechat());
+                }
+            } catch (Exception e) {
+                log.error("获取商家用户信息失败: {}", e.getMessage(), e);
+            }
+            
+            // 3. 查询商家等级信息
+            try {
+                MerchantLevel level = merchantLevelMapper.selectById(merchant.getLevelId());
+                if (level != null) {
+                    profileVO.setLevelName(level.getLevelName());
+                    profileVO.setLevelDesc(level.getDescription());
+                    profileVO.setCommissionRate(level.getCommissionRate());
+                }
+            } catch (Exception e) {
+                log.error("获取商家等级信息失败: {}", e.getMessage(), e);
+            }
+            
+            // 4. 为避免循环依赖，初始化一个空的商品列表
+            // 前端可以在需要时单独调用获取商品列表的接口
+            profileVO.setProducts(new ArrayList<>());
+            
+            // 5. 查询商家服务评价（限制展示5条）
+            try {
+                log.info("开始查询商家[{}]服务评价", merchantId);
+                List<MerchantServiceReview> reviews = merchantServiceReviewMapper.selectByMerchantId(merchantId, 5);
+                log.info("商家[{}]服务评价查询结果: {}", merchantId, reviews != null ? reviews.size() : 0);
+                
+                if (reviews != null && !reviews.isEmpty()) {
+                    List<MerchantProfileVO.MerchantServiceReviewVO> reviewVOs = new ArrayList<>();
+                    
+                    for (MerchantServiceReview review : reviews) {
+                        MerchantProfileVO.MerchantServiceReviewVO reviewVO = new MerchantProfileVO.MerchantServiceReviewVO();
+                        reviewVO.setId(review.getId());
+                        reviewVO.setUserId(review.getUserId());
+                        reviewVO.setServiceAttitudeRating(review.getServiceAttitudeRating());
+                        reviewVO.setContent(review.getContent());
+                        reviewVO.setCreateTime(review.getCreateTime());
+                        
+                        // 查询评价用户名称
+                        User reviewer = userMapper.selectById(review.getUserId());
+                        if (reviewer != null) {
+                            reviewVO.setUsername(reviewer.getUsername());
+                        }
+                        
+                        reviewVOs.add(reviewVO);
+                    }
+                    
+                    profileVO.setReviews(reviewVOs);
+                } else {
+                    profileVO.setReviews(new ArrayList<>());
+                }
+            } catch (Exception e) {
+                log.error("获取商家评价失败: {}", e.getMessage(), e);
+                // 出错时设置空列表，避免整个接口失败
+                profileVO.setReviews(new ArrayList<>());
+            }
+            
+            return profileVO;
+        } catch (Exception e) {
+            log.error("获取商家主页聚合信息失败: {}", e.getMessage(), e);
+            return null;
         }
-        
-        return profileVO;
     }
 } 

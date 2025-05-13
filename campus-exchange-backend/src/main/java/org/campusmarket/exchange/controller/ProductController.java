@@ -17,6 +17,8 @@ import org.campusmarket.exchange.service.IProductService;
 import org.campusmarket.exchange.util.UserContext;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 
@@ -26,6 +28,8 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/products")
 public class ProductController {
+    
+    private static final Logger log = LoggerFactory.getLogger(ProductController.class);
     
     @Resource
     private IProductService productService;
@@ -81,7 +85,15 @@ public class ProductController {
      */
     @GetMapping("/merchant/{merchantId}")
     public Result<?> getMerchantProducts(@PathVariable Long merchantId) {
-        return Result.success(productService.getMerchantProducts(merchantId, null));
+        try {
+            log.info("开始获取商家[{}]商品列表", merchantId);
+            List<ProductVO> products = productService.getMerchantProducts(merchantId, null);
+            log.info("成功获取到商家[{}]的商品列表，共{}个商品", merchantId, products.size());
+            return Result.success(products);
+        } catch (Exception e) {
+            log.error("获取商家商品列表失败，merchantId={}，错误信息: {}", merchantId, e.getMessage(), e);
+            return Result.error(500, "获取商家商品列表失败: " + e.getMessage());
+        }
     }
     
     /**

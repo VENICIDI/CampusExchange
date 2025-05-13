@@ -2,6 +2,7 @@ package org.campusmarket.exchange.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.campusmarket.exchange.entity.OrderItem;
 
 import java.util.List;
@@ -16,6 +17,7 @@ public interface OrderItemMapper extends BaseMapper<OrderItem> {
      * @param orderId 订单ID
      * @return 订单项列表
      */
+    @Select("SELECT * FROM order_item WHERE order_id = #{orderId}")
     List<OrderItem> selectByOrderId(@Param("orderId") Long orderId);
     
     /**
@@ -23,6 +25,7 @@ public interface OrderItemMapper extends BaseMapper<OrderItem> {
      * @param orderNo 订单编号
      * @return 订单项列表
      */
+    @Select("SELECT oi.* FROM order_item oi JOIN `order` o ON oi.order_id = o.id WHERE o.order_no = #{orderNo}")
     List<OrderItem> selectByOrderNo(@Param("orderNo") String orderNo);
     
     /**

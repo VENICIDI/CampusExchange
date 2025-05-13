@@ -33,7 +33,7 @@ public class OrderVO {
     /**
      * 用户名 (买家)
      */
-    private String username;
+    private String userName;
     
     /**
      * 商家ID
@@ -43,7 +43,7 @@ public class OrderVO {
     /**
      * 商家店铺名
      */
-    private String storeName;
+    private String merchantName;
     
     /**
      * 订单商品总金额
@@ -64,6 +64,31 @@ public class OrderVO {
      * 交易方式
      */
     private TradeTypeEnum tradeType;
+    
+    /**
+     * 收货人姓名
+     */
+    private String receiverName;
+    
+    /**
+     * 收货人手机号
+     */
+    private String receiverPhone;
+    
+    /**
+     * 收货地址
+     */
+    private String receiverAddress;
+    
+    /**
+     * 快递公司
+     */
+    private String expressCompany;
+    
+    /**
+     * 快递单号
+     */
+    private String trackingNo;
     
     /**
      * 创建时间
@@ -140,9 +165,9 @@ public class OrderVO {
         public static SimpleOrderItem fromOrderItem(OrderItem orderItem) {
             SimpleOrderItem simpleItem = new SimpleOrderItem();
             simpleItem.setProductId(orderItem.getProductId());
-            simpleItem.setProductName(orderItem.getProductName());
-            simpleItem.setProductImage(orderItem.getProductImage());
-            simpleItem.setPrice(orderItem.getPrice());
+            simpleItem.setProductName(orderItem.getProductNameSnapshot());
+            simpleItem.setProductImage(orderItem.getProductImageSnapshot());
+            simpleItem.setPrice(orderItem.getPriceAtPurchase());
             simpleItem.setQuantity(orderItem.getQuantity());
             return simpleItem;
         }

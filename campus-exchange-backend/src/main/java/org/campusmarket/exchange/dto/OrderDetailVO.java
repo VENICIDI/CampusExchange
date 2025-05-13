@@ -1,9 +1,7 @@
 package org.campusmarket.exchange.dto;
 
 import lombok.Data;
-import org.campusmarket.exchange.entity.OrderAddress;
 import org.campusmarket.exchange.entity.OrderItem;
-import org.campusmarket.exchange.entity.OrderLog;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
 import org.campusmarket.exchange.enums.TradeTypeEnum;
 
@@ -35,7 +33,7 @@ public class OrderDetailVO {
     /**
      * 用户名 (买家)
      */
-    private String username;
+    private String userName;
     
     /**
      * 商家ID
@@ -45,7 +43,7 @@ public class OrderDetailVO {
     /**
      * 商家店铺名
      */
-    private String storeName;
+    private String merchantName;
     
     /**
      * 商品总金额
@@ -131,16 +129,6 @@ public class OrderDetailVO {
      * 订单项列表
      */
     private List<OrderItem> orderItems;
-    
-    /**
-     * 收货地址信息
-     */
-    private OrderAddress orderAddress;
-    
-    /**
-     * 订单状态日志
-     */
-    private List<OrderLog> orderLogs;
     
     /**
      * 订单状态的中文描述

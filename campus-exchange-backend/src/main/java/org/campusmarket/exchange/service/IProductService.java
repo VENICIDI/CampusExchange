@@ -83,4 +83,12 @@ public interface IProductService {
      * @return 是否成功
      */
     boolean deleteProduct(Long productId);
+    
+    /**
+     * 减少商品库存
+     * @param productId 商品ID
+     * @param quantity 减少数量
+     * @return 是否成功
+     */
+    boolean decreaseStock(Long productId, Integer quantity);
 } 

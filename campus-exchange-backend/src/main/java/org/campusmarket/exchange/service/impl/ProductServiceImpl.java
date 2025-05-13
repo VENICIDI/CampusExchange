@@ -95,7 +95,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                 image.setProductId(product.getId());
                 image.setImageUrl(url);
                 image.setCreateTime(LocalDateTime.now());
-                image.setSort(index);
+                image.setSortOrder(index);
                 image.setIsMain(index == 0);
                 images.add(image);
                 index++;
@@ -167,7 +167,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                     image.setProductId(productId);
                     image.setImageUrl(url);
                     image.setCreateTime(LocalDateTime.now());
-                    image.setSort(i);
+                    image.setSortOrder(i);
                     image.setIsMain(i == 0);
                     images.add(image);
                 }
@@ -219,7 +219,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         // 2. 查询商品图片
         LambdaQueryWrapper<ProductImage> imageQueryWrapper = Wrappers.<ProductImage>lambdaQuery()
                 .eq(ProductImage::getProductId, productId)
-                .orderByAsc(ProductImage::getSort);
+                .orderByAsc(ProductImage::getSortOrder);
         List<ProductImage> images = productImageMapper.selectList(imageQueryWrapper);
         
         // 3. 构建返回对象
@@ -317,7 +317,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             // 设置主图
             LambdaQueryWrapper<ProductImage> imageWrapper = Wrappers.<ProductImage>lambdaQuery()
                 .eq(ProductImage::getProductId, product.getId())
-                .orderByAsc(ProductImage::getSort);
+                .orderByAsc(ProductImage::getSortOrder);
             List<ProductImage> images = productImageMapper.selectList(imageWrapper);
             ProductImage mainImage = images.stream()
                 .filter(ProductImage::getIsMain)
@@ -341,52 +341,65 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     public List<ProductVO> getMerchantProducts(Long merchantId, ProductStatusEnum status) {
         log.info("获取商家[{}]商品列表, 状态: {}", merchantId, status);
         
-        // 1. 构建查询条件
-        LambdaQueryWrapper<Product> queryWrapper = Wrappers.<Product>lambdaQuery()
-                .eq(Product::getMerchantId, merchantId)
-                .eq(status != null, Product::getStatus, status)
-                .orderByDesc(Product::getUpdateTime);
-        
-        List<Product> products = list(queryWrapper);
-        List<ProductVO> result = new ArrayList<>();
-        
-        for (Product product : products) {
-            ProductVO vo = new ProductVO();
-            BeanUtils.copyProperties(product, vo);
+        try {
+            // 1. 构建查询条件
+            LambdaQueryWrapper<Product> queryWrapper = Wrappers.<Product>lambdaQuery()
+                    .eq(Product::getMerchantId, merchantId)
+                    .eq(status != null, Product::getStatus, status)
+                    .orderByDesc(Product::getUpdateTime);
             
-            // 确保正确映射字段
-            vo.setProductCondition(product.getProductCondition());
-            vo.setSalesCount(product.getSales());
-            vo.setSizeInfo(product.getSize());
-            vo.setAverageRating(product.getRating());
+            List<Product> products = list(queryWrapper);
+            List<ProductVO> result = new ArrayList<>();
             
-            // 查询商品图片
-            LambdaQueryWrapper<ProductImage> imageWrapper = Wrappers.<ProductImage>lambdaQuery()
-                    .eq(ProductImage::getProductId, product.getId())
-                    .orderByAsc(ProductImage::getSort);
-            List<ProductImage> images = productImageMapper.selectList(imageWrapper);
-            
-            List<String> imageUrls = images.stream()
-                    .map(ProductImage::getImageUrl)
-                    .collect(Collectors.toList());
-            
-            vo.setImages(imageUrls);
-            vo.setImageUrls(imageUrls);
-            
-            // 设置主图
-            ProductImage mainImage = images.stream()
-                    .filter(ProductImage::getIsMain)
-                    .findFirst()
-                    .orElse(images.isEmpty() ? null : images.get(0));
+            for (Product product : products) {
+                ProductVO vo = new ProductVO();
+                BeanUtils.copyProperties(product, vo);
+                
+                // 确保正确映射字段
+                vo.setProductCondition(product.getProductCondition());
+                vo.setSalesCount(product.getSales());
+                vo.setSizeInfo(product.getSize());
+                vo.setAverageRating(product.getRating());
+                
+                try {
+                    // 查询商品图片
+                    LambdaQueryWrapper<ProductImage> imageWrapper = Wrappers.<ProductImage>lambdaQuery()
+                            .eq(ProductImage::getProductId, product.getId())
+                            .orderByAsc(ProductImage::getSortOrder);
+                    List<ProductImage> images = productImageMapper.selectList(imageWrapper);
                     
-            if (mainImage != null) {
-                vo.setMainImage(mainImage.getImageUrl());
+                    List<String> imageUrls = images.stream()
+                            .map(ProductImage::getImageUrl)
+                            .collect(Collectors.toList());
+                    
+                    vo.setImages(imageUrls);
+                    vo.setImageUrls(imageUrls);
+                    
+                    // 设置主图
+                    ProductImage mainImage = images.stream()
+                            .filter(ProductImage::getIsMain)
+                            .findFirst()
+                            .orElse(images.isEmpty() ? null : images.get(0));
+                            
+                    if (mainImage != null) {
+                        vo.setMainImage(mainImage.getImageUrl());
+                    }
+                } catch (Exception e) {
+                    log.error("获取商品[{}]图片失败: {}", product.getId(), e.getMessage());
+                    // 设置一个空列表，不影响整体返回
+                    vo.setImages(new ArrayList<>());
+                    vo.setImageUrls(new ArrayList<>());
+                }
+                
+                result.add(vo);
             }
             
-            result.add(vo);
+            return result;
+        } catch (Exception e) {
+            log.error("获取商家[{}]商品列表失败: {}", merchantId, e.getMessage(), e);
+            // 发生异常时返回空列表，避免整个接口崩溃
+            return new ArrayList<>();
         }
-        
-        return result;
     }
 
     @Override
@@ -426,7 +439,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             // 查询商品图片
             LambdaQueryWrapper<ProductImage> imageWrapper = Wrappers.<ProductImage>lambdaQuery()
                     .eq(ProductImage::getProductId, product.getId())
-                    .orderByAsc(ProductImage::getSort);
+                    .orderByAsc(ProductImage::getSortOrder);
             List<ProductImage> images = productImageMapper.selectList(imageWrapper);
             
             List<String> imageUrls = images.stream()
@@ -478,7 +491,7 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             // 查询所有商品图片 
             LambdaQueryWrapper<ProductImage> imageListWrapper = Wrappers.<ProductImage>lambdaQuery()
                     .eq(ProductImage::getProductId, product.getId())
-                    .last("ORDER BY sort_order ASC");
+                    .orderByAsc(ProductImage::getSortOrder);
             List<ProductImage> images = productImageMapper.selectList(imageListWrapper);
             
             List<String> imageUrls = images.stream()
@@ -524,5 +537,35 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         boolean removed = removeById(productId);
         log.info("商品删除{}", removed ? "成功" : "失败");
         return removed;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean decreaseStock(Long productId, Integer quantity) {
+        // 1. 查询商品
+        Product product = getById(productId);
+        if (product == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "商品不存在");
+        }
+        
+        // 2. 校验库存
+        if (product.getStock() < quantity) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
+                    "商品[" + product.getName() + "]库存不足，当前库存:" + product.getStock());
+        }
+        
+        // 3. 减少库存
+        Product updateProduct = new Product();
+        updateProduct.setId(productId);
+        updateProduct.setStock(product.getStock() - quantity);
+        
+        // 4. 增加销量
+        updateProduct.setSales(product.getSales() + quantity);
+        
+        // 5. 更新时间
+        updateProduct.setUpdateTime(LocalDateTime.now());
+        
+        // 6. 更新商品
+        return updateById(updateProduct);
     }
 } 

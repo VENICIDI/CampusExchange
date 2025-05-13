@@ -9,6 +9,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.campusmarket.exchange.dto.*;
 import org.campusmarket.exchange.entity.*;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
+import org.campusmarket.exchange.enums.ReviewStatusEnum;
 import org.campusmarket.exchange.enums.TradeTypeEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.*;
@@ -39,12 +40,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     
     @Resource
     private OrderItemMapper orderItemMapper;
-    
-    @Resource
-    private OrderAddressMapper orderAddressMapper;
-    
-    @Resource
-    private OrderLogMapper orderLogMapper;
     
     @Resource
     private ProductMapper productMapper;
@@ -85,6 +80,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         BigDecimal totalProductAmount = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
         
+        // 7. 计算平台佣金率 (假设为订单金额的5%)
+        BigDecimal platformCommissionRate = new BigDecimal("0.05");
+        
         for (OrderCreateDTO.OrderItemDTO itemDTO : orderDTO.getItems()) {
             // 查询商品
             Product product = productMapper.selectById(itemDTO.getProductId());
@@ -107,18 +105,19 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             BigDecimal subtotal = product.getCurrentPrice().multiply(new BigDecimal(itemDTO.getQuantity()));
             totalProductAmount = totalProductAmount.add(subtotal);
             
-            // 创建订单项
+            // 创建订单项（先不设置orderId，等订单创建后再设置）
             OrderItem orderItem = new OrderItem();
-            orderItem.setOrderNo(orderNo);
             orderItem.setProductId(product.getId());
-            orderItem.setProductName(product.getName());
-            orderItem.setProductImage(null);
-            orderItem.setPrice(product.getCurrentPrice());
+            orderItem.setMerchantId(product.getMerchantId());
+            orderItem.setProductNameSnapshot(product.getName());
+            orderItem.setProductImageSnapshot(null);
+            orderItem.setPriceAtPurchase(product.getCurrentPrice());
             orderItem.setQuantity(itemDTO.getQuantity());
-            orderItem.setSubtotal(subtotal);
-            orderItem.setSpecifications("尺寸:" + product.getSize() + "; 新旧程度:" + (product.getProductCondition() != null ? product.getProductCondition().name() : "未知"));
+            orderItem.setItemTotalAmount(subtotal);
+            orderItem.setCommissionRateSnapshot(platformCommissionRate);
+            orderItem.setCommissionAmountSnapshot(subtotal.multiply(platformCommissionRate));
+            orderItem.setReviewStatus(ReviewStatusEnum.NOT_REVIEWED);
             orderItem.setCreateTime(LocalDateTime.now());
-            orderItem.setUpdateTime(LocalDateTime.now());
             
             orderItems.add(orderItem);
         }
@@ -143,8 +142,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             actualPaymentAmount = BigDecimal.ZERO;
         }
         
-        // 7. 计算平台佣金 (假设为订单金额的5%)
-        BigDecimal platformCommissionRate = new BigDecimal("0.05");
         BigDecimal platformCommissionAmount = totalProductAmount.multiply(platformCommissionRate);
         
         // 8. 创建订单
@@ -158,7 +155,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         order.setActualPaymentAmount(actualPaymentAmount);
         order.setPlatformCommissionAmount(platformCommissionAmount);
         order.setStatus(OrderStatusEnum.PENDING_PAYMENT);
-        order.setTradeType(orderDTO.getTradeType().getCode());
+        order.setTradeType(orderDTO.getTradeType());
         
         // 处理线下交易信息
         if (orderDTO.getTradeType() == TradeTypeEnum.OFFLINE) {
@@ -168,6 +165,46 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                         orderDTO.getOfflineMeetingTime(),
                         DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
                 ));
+            }
+        } else {
+            // 处理快递信息
+            if (orderDTO.getAddress() != null) {
+                // 使用用户提交的地址
+                OrderCreateDTO.OrderAddressDTO addressDTO = orderDTO.getAddress();
+                order.setReceiverName(addressDTO.getReceiverName());
+                order.setReceiverPhone(addressDTO.getReceiverPhone());
+                order.setReceiverAddress(addressDTO.getProvince() + " " + 
+                        addressDTO.getCity() + " " + 
+                        addressDTO.getDistrict() + " " + 
+                        addressDTO.getDetailAddress());
+                
+                // 如果设置为默认地址，则更新用户的默认地址
+                if (Boolean.TRUE.equals(addressDTO.getIsDefault())) {
+                    String defaultAddress = addressDTO.getReceiverName() + "," + 
+                            addressDTO.getReceiverPhone() + "," + 
+                            addressDTO.getProvince() + "," + 
+                            addressDTO.getCity() + "," + 
+                            addressDTO.getDistrict() + "," + 
+                            addressDTO.getDetailAddress();
+                    
+                    User updateUser = new User();
+                    updateUser.setId(userId);
+                    updateUser.setDefaultAddress(defaultAddress);
+                    userMapper.updateById(updateUser);
+                }
+            } else if (user.getDefaultAddress() != null && !user.getDefaultAddress().isEmpty()) {
+                // 使用用户默认地址
+                String[] addressParts = user.getDefaultAddress().split(",");
+                if (addressParts.length >= 6) {
+                    order.setReceiverName(addressParts[0]);
+                    order.setReceiverPhone(addressParts[1]);
+                    order.setReceiverAddress(addressParts[2] + " " + 
+                            addressParts[3] + " " + 
+                            addressParts[4] + " " + 
+                            addressParts[5]);
+                }
+            } else {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "快递交易必须提供收货地址");
             }
         }
         
@@ -183,64 +220,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             orderItemMapper.insert(item);
         }
         
-        // 11. 保存收货地址 (仅快递交易需要)
-        if (orderDTO.getTradeType() == TradeTypeEnum.EXPRESS) {
-            OrderAddress orderAddress = new OrderAddress();
-            orderAddress.setOrderId(order.getId());
-            orderAddress.setOrderNo(orderNo);
-            orderAddress.setUserId(userId);
-            
-            // 根据地址ID获取收货地址信息
-            if (orderDTO.getAddressId() != null) {
-                // 此处需要从用户地址表读取地址信息
-                // 由于没有实现用户地址管理功能，暂时使用直接提交的地址信息
-                if (orderDTO.getAddress() == null) {
-                    throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "收货地址不能为空");
-                }
-                
-                OrderCreateDTO.OrderAddressDTO addrDTO = orderDTO.getAddress();
-                orderAddress.setReceiverName(addrDTO.getReceiverName());
-                orderAddress.setReceiverPhone(addrDTO.getReceiverPhone());
-                orderAddress.setProvince(addrDTO.getProvince());
-                orderAddress.setCity(addrDTO.getCity());
-                orderAddress.setDistrict(addrDTO.getDistrict());
-                orderAddress.setDetailAddress(addrDTO.getDetailAddress());
-                orderAddress.setPostalCode(addrDTO.getPostalCode());
-                orderAddress.setIsDefault(addrDTO.getIsDefault());
-            } else {
-                if (orderDTO.getAddress() == null) {
-                    throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "收货地址不能为空");
-                }
-                
-                OrderCreateDTO.OrderAddressDTO addrDTO = orderDTO.getAddress();
-                orderAddress.setReceiverName(addrDTO.getReceiverName());
-                orderAddress.setReceiverPhone(addrDTO.getReceiverPhone());
-                orderAddress.setProvince(addrDTO.getProvince());
-                orderAddress.setCity(addrDTO.getCity());
-                orderAddress.setDistrict(addrDTO.getDistrict());
-                orderAddress.setDetailAddress(addrDTO.getDetailAddress());
-                orderAddress.setPostalCode(addrDTO.getPostalCode());
-                orderAddress.setIsDefault(addrDTO.getIsDefault());
-            }
-            
-            orderAddress.setCreateTime(LocalDateTime.now());
-            orderAddress.setUpdateTime(LocalDateTime.now());
-            
-            orderAddressMapper.insert(orderAddress);
+        // 11. 减少商品库存
+        for (OrderCreateDTO.OrderItemDTO itemDTO : orderDTO.getItems()) {
+            productService.decreaseStock(itemDTO.getProductId(), itemDTO.getQuantity());
         }
-        
-        // 12. 创建订单日志
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setCurrentStatus(OrderStatusEnum.PENDING_PAYMENT);
-        orderLog.setOperatorId(userId);
-        orderLog.setOperatorType("USER");
-        orderLog.setOperatorName(user.getUsername());
-        orderLog.setOperationNote("创建订单");
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
         
         log.info("订单创建成功，订单号: {}", orderNo);
         return orderNo;
@@ -254,9 +237,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         log.info("获取订单详情: {}", orderNo);
         
         // 1. 查询订单
-        LambdaQueryWrapper<Order> orderWrapper = Wrappers.<Order>lambdaQuery()
-                .eq(Order::getOrderNo, orderNo);
-        Order order = orderMapper.selectOne(orderWrapper);
+        Order order = orderMapper.selectByOrderNo(orderNo);
         if (order == null) {
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "订单不存在");
         }
@@ -264,33 +245,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         // 2. 查询订单项
         List<OrderItem> orderItems = orderItemMapper.selectByOrderNo(orderNo);
         
-        // 3. 查询收货地址
-        OrderAddress orderAddress = orderAddressMapper.selectByOrderNo(orderNo);
-        
-        // 4. 查询订单日志
-        List<OrderLog> orderLogs = orderLogMapper.selectByOrderNo(orderNo);
-        
-        // 5. 获取买家信息
+        // 3. 获取买家信息
         User user = userMapper.selectById(order.getUserId());
         
-        // 6. 获取商家信息
+        // 4. 获取商家信息
         Merchant merchant = merchantMapper.selectById(order.getMerchantId());
         
-        // 7. 构建订单详情VO
+        // 5. 构建订单详情VO
         OrderDetailVO detailVO = new OrderDetailVO();
         BeanUtils.copyProperties(order, detailVO);
         
-        if (user != null) {
-            detailVO.setUsername(user.getUsername());
-        }
+        detailVO.setUserName(user != null ? user.getUsername() : "未知用户");
+        detailVO.setMerchantName(merchant != null ? merchant.getStoreName() : "未知商家");
         
-        if (merchant != null) {
-            detailVO.setStoreName(merchant.getStoreName());
-        }
-        
+        // 设置订单项
         detailVO.setOrderItems(orderItems);
-        detailVO.setOrderAddress(orderAddress);
-        detailVO.setOrderLogs(orderLogs);
         
         return detailVO;
     }
@@ -389,22 +358,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
-        // 4. 记录订单日志
-        User user = userMapper.selectById(userId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(OrderStatusEnum.CANCELLED);
-        orderLog.setOperatorId(userId);
-        orderLog.setOperatorType("USER");
-        orderLog.setOperatorName(user != null ? user.getUsername() : "");
-        orderLog.setOperationNote("用户取消订单");
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
-        
         log.info("订单取消成功");
         return true;
     }
@@ -441,22 +394,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);
-        
-        // 4. 记录订单日志
-        User user = userMapper.selectById(userId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(OrderStatusEnum.PENDING_SHIPMENT);
-        orderLog.setOperatorId(userId);
-        orderLog.setOperatorType("USER");
-        orderLog.setOperatorName(user != null ? user.getUsername() : "");
-        orderLog.setOperationNote("用户支付订单");
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
         
         log.info("订单支付成功");
         return true;
@@ -496,22 +433,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
-        // 4. 记录订单日志
-        User user = userMapper.selectById(userId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(OrderStatusEnum.COMPLETED);
-        orderLog.setOperatorId(userId);
-        orderLog.setOperatorType("USER");
-        orderLog.setOperatorName(user != null ? user.getUsername() : "");
-        orderLog.setOperationNote("用户确认收货");
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
-        
         log.info("确认收货成功");
         return true;
     }
@@ -537,44 +458,21 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         // 2. 校验订单状态
         if (order.getStatus() != OrderStatusEnum.PENDING_SHIPMENT) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
-                    "只能发货待发货状态的订单，当前状态: " + order.getStatus().getDesc());
+                    "只有待发货订单才能发货，当前状态: " + order.getStatus().getDesc());
         }
         
-        // 3. 校验交易方式
-        if (!TradeTypeEnum.EXPRESS.getCode().equals(order.getTradeType())) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
-                    "只有快递交易方式才能发货");
-        }
-        
-        // 4. 更新订单状态
+        // 3. 更新订单状态和发货信息
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
         updateOrder.setStatus(OrderStatusEnum.SHIPPED);
         updateOrder.setShippingTime(LocalDateTime.now());
+        updateOrder.setTrackingNo(trackingNo);
+        updateOrder.setExpressCompany(expressCompany);
         updateOrder.setUpdateTime(LocalDateTime.now());
-        
-        // 在这里可以添加快递单号和快递公司字段，但当前Order实体类中没有这些字段
-        // 如果需要，可以为Order类添加这两个字段
         
         orderMapper.updateById(updateOrder);
         
-        // 5. 记录订单日志
-        Merchant merchant = merchantMapper.selectById(merchantId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(OrderStatusEnum.SHIPPED);
-        orderLog.setOperatorId(merchantId);
-        orderLog.setOperatorType("MERCHANT");
-        orderLog.setOperatorName(merchant != null ? merchant.getStoreName() : "");
-        orderLog.setOperationNote("商家发货，快递单号: " + trackingNo + ", 快递公司: " + expressCompany);
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
-        
-        log.info("发货成功");
+        log.info("订单发货成功");
         return true;
     }
 
@@ -611,22 +509,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
-        // 4. 记录订单日志
-        User user = userMapper.selectById(userId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(OrderStatusEnum.RETURN_REQUESTED);
-        orderLog.setOperatorId(userId);
-        orderLog.setOperatorType("USER");
-        orderLog.setOperatorName(user != null ? user.getUsername() : "");
-        orderLog.setOperationNote("用户申请退款/退货，原因: " + reason);
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
-        
         log.info("申请退款/退货成功");
         return true;
     }
@@ -660,7 +542,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         updateOrder.setId(order.getId());
         
         OrderStatusEnum newStatus;
-        String operationNote;
         
         if (approve) {
             // 同意退款
@@ -668,38 +549,19 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 order.getStatus() == OrderStatusEnum.SHIPPED) {
                 // 如果是快递交易且已发货，则需要退货
                 newStatus = OrderStatusEnum.RETURN_APPROVED;
-                operationNote = "商家同意退款/退货申请，等待买家退货";
             } else {
                 // 否则直接退款
                 newStatus = OrderStatusEnum.RETURNED;
-                operationNote = "商家同意退款申请，已退款";
             }
         } else {
             // 拒绝退款
             newStatus = OrderStatusEnum.RETURN_REJECTED;
-            operationNote = "商家拒绝退款/退货申请，原因: " + remark;
         }
         
         updateOrder.setStatus(newStatus);
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);
-        
-        // 4. 记录订单日志
-        Merchant merchant = merchantMapper.selectById(merchantId);
-        
-        OrderLog orderLog = new OrderLog();
-        orderLog.setOrderId(order.getId());
-        orderLog.setOrderNo(orderNo);
-        orderLog.setPreviousStatus(order.getStatus());
-        orderLog.setCurrentStatus(newStatus);
-        orderLog.setOperatorId(merchantId);
-        orderLog.setOperatorType("MERCHANT");
-        orderLog.setOperatorName(merchant != null ? merchant.getStoreName() : "");
-        orderLog.setOperationNote(operationNote);
-        orderLog.setCreateTime(LocalDateTime.now());
-        
-        orderLogMapper.insert(orderLog);
         
         log.info("处理退款/退货申请成功");
         return true;
@@ -731,7 +593,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (order.getUserId() != null) {
             User user = userMapper.selectById(order.getUserId());
             if (user != null) {
-                vo.setUsername(user.getUsername());
+                vo.setUserName(user.getUsername());
             }
         }
         
@@ -739,7 +601,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (order.getMerchantId() != null) {
             Merchant merchant = merchantMapper.selectById(order.getMerchantId());
             if (merchant != null) {
-                vo.setStoreName(merchant.getStoreName());
+                vo.setMerchantName(merchant.getStoreName());
             }
         }
         

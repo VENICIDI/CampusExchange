@@ -1,9 +1,20 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="org.campusmarket.exchange.mapper.MerchantServiceReviewMapper">
-
+    
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="org.campusmarket.exchange.entity.MerchantServiceReview">
+        <id column="id" property="id" />
+        <result column="order_id" property="orderId" />
+        <result column="user_id" property="userId" />
+        <result column="merchant_id" property="merchantId" />
+        <result column="service_attitude_rating" property="serviceAttitudeRating" />
+        <result column="content" property="content" />
+        <result column="create_time" property="createTime" />
+    </resultMap>
+    
     <!-- 根据商家ID查询评价列表 -->
-    <select id="selectByMerchantId" resultType="org.campusmarket.exchange.entity.MerchantServiceReview">
+    <select id="selectByMerchantId" resultMap="BaseResultMap">
         SELECT * FROM merchant_service_review
         WHERE merchant_id = #{merchantId}
         ORDER BY create_time DESC

@@ -5,15 +5,12 @@ import com.fasterxml.jackson.annotation.JsonValue;
 import lombok.Getter;
 
 /**
- * 商品新旧程度枚举
+ * 商品评价状态枚举
  */
 @Getter
-public enum ProductConditionEnum {
-    NEW("NEW", "全新"),
-    LIKE_NEW("LIKE_NEW", "九成新"),
-    GOOD("GOOD", "八成新"),
-    FAIR("FAIR", "七成新"),
-    POOR("POOR", "六成新及以下");
+public enum ReviewStatusEnum {
+    NOT_REVIEWED("NOT_REVIEWED", "未评价"),
+    REVIEWED("REVIEWED", "已评价");
     
     @EnumValue
     private final String code;
@@ -21,8 +18,8 @@ public enum ProductConditionEnum {
     @JsonValue
     private final String desc;
     
-    ProductConditionEnum(String code, String desc) {
+    ReviewStatusEnum(String code, String desc) {
         this.code = code;
         this.desc = desc;
     }
-}
+} 

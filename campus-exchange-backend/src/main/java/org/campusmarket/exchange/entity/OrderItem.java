@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import org.campusmarket.exchange.enums.ReviewStatusEnum;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -22,33 +23,36 @@ public class OrderItem {
     // 订单ID (外键)
     private Long orderId;
     
-    // 订单编号
-    private String orderNo;
-    
     // 商品ID (外键)
     private Long productId;
     
-    // 商品名称 (冗余，方便查询)
-    private String productName;
+    // 商家ID (冗余, 便于查询)
+    private Long merchantId;
     
-    // 商品封面图 (冗余，方便展示)
-    private String productImage;
+    // 商品名称快照
+    private String productNameSnapshot;
     
-    // 商品单价
-    private BigDecimal price;
+    // 商品主图快照
+    private String productImageSnapshot;
+    
+    // 购买时商品单价
+    private BigDecimal priceAtPurchase;
     
     // 购买数量
     private Integer quantity;
     
-    // 小计金额 (单价 × 数量)
-    private BigDecimal subtotal;
+    // 该项商品总金额 (单价*数量)
+    private BigDecimal itemTotalAmount;
     
-    // 商品规格描述（如尺寸、新旧程度等）
-    private String specifications;
+    // 下单时手续费率快照
+    private BigDecimal commissionRateSnapshot;
+    
+    // 该项商品产生的手续费金额快照
+    private BigDecimal commissionAmountSnapshot;
+    
+    // 商品评价状态：NOT_REVIEWED-未评价，REVIEWED-已评价
+    private ReviewStatusEnum reviewStatus;
     
     // 创建时间
     private LocalDateTime createTime;
-    
-    // 更新时间
-    private LocalDateTime updateTime;
 } 

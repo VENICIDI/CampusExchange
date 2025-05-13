@@ -25,7 +25,7 @@ public class ProductImage {
     
     // 排序序号
     @TableField("sort_order")
-    private Integer sort;
+    private Integer sortOrder;
     
     // 是否主图：0-否，1-是
     private Boolean isMain;
@@ -34,12 +34,12 @@ public class ProductImage {
     private LocalDateTime createTime;
     
     // 获取排序顺序（兼容旧代码）
-    public Integer getSortOrder() {
-        return this.sort;
+    public Integer getSort() {
+        return this.sortOrder;
     }
     
     // 设置排序顺序（兼容旧代码）
-    public void setSortOrder(Integer sortOrder) {
-        this.sort = sortOrder;
+    public void setSort(Integer sort) {
+        this.sortOrder = sort;
     }
 } 

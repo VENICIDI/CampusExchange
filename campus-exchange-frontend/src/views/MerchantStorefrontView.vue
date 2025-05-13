@@ -62,7 +62,7 @@
     <div class="merchant-products">
       <h3>店铺商品</h3>
       <div v-if="isLoading.products" class="loading-products">正在加载商品...</div>
-      <div v-else-if="!merchantProfile.products || merchantProfile.products.length === 0" class="no-products">
+      <div v-else-if="!merchantProfile || !merchantProfile.products || merchantProfile.products.length === 0" class="no-products">
         <p>商家暂无商品发布</p>
       </div>
       <div v-else class="product-grid">
@@ -119,6 +119,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { ElMessage } from 'element-plus';
 import ProductCard from '@/components/product/ProductCard.vue';
+import { productApi } from '@/api/product'; // 导入productApi
 
 const route = useRoute();
 const router = useRouter();
@@ -149,7 +150,6 @@ const isSelfStore = computed(() => {
 // 获取商家主页信息
 const fetchMerchantProfile = async () => {
   isLoading.value.profile = true;
-  isLoading.value.products = true;
   isLoading.value.reviews = true;
   
   try {
@@ -167,8 +167,45 @@ const fetchMerchantProfile = async () => {
     ElMessage.error('获取商家信息出错，请稍后重试');
   } finally {
     isLoading.value.profile = false;
-    isLoading.value.products = false;
     isLoading.value.reviews = false;
+  }
+};
+
+// 获取商家商品列表
+const fetchMerchantProducts = async (id) => {
+  isLoading.value.products = true;
+  try {
+    console.log('开始获取商家商品列表，商家ID:', id);
+    const response = await productApi.getMerchantProducts(id);
+    if (response.data.code === 200 && response.data.data) {
+      console.log('获取到的商家商品列表:', response.data.data);
+      // 确保merchantProfile存在后再设置products
+      if (merchantProfile.value) {
+        merchantProfile.value.products = response.data.data;
+      } else {
+        console.warn('merchantProfile为空，无法设置products属性');
+        // 如果merchantProfile不存在，创建一个包含products的对象
+        merchantProfile.value = { products: response.data.data };
+      }
+    } else {
+      console.error('获取商家商品列表失败:', response.data.message);
+      // 确保merchantProfile存在后再设置空数组
+      if (merchantProfile.value) {
+        merchantProfile.value.products = [];
+      } else {
+        merchantProfile.value = { products: [] };
+      }
+    }
+  } catch (error) {
+    console.error('获取商家商品列表出错:', error);
+    // 确保merchantProfile存在后再设置空数组
+    if (merchantProfile.value) {
+      merchantProfile.value.products = [];
+    } else {
+      merchantProfile.value = { products: [] };
+    }
+  } finally {
+    isLoading.value.products = false;
   }
 };
 
@@ -212,9 +249,17 @@ const formatCondition = (condition) => {
 };
 
 // 页面加载时获取数据
-onMounted(() => {
+onMounted(async () => {
   if (merchantId.value) {
-    fetchMerchantProfile();
+    try {
+      // 首先获取商家信息
+      await fetchMerchantProfile();
+      // 然后获取商品列表
+      await fetchMerchantProducts(merchantId.value);
+    } catch (error) {
+      console.error('初始化商家页面数据出错:', error);
+      ElMessage.error('加载商家信息出错，请稍后重试');
+    }
   } else {
     ElMessage.error('商家ID不能为空');
     router.push('/');
