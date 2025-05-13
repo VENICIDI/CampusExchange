@@ -57,6 +57,9 @@
           <div class="product-image">
             <img :src="product.mainImage || '/placeholder.png'" :alt="product.name">
             <div v-if="product.negotiable" class="negotiable-badge">可议价</div>
+            <div class="product-condition-badge" :class="getConditionClass(product.productCondition)">
+              {{ formatCondition(product.productCondition) }}
+            </div>
           </div>
           <div class="product-info">
             <h3>{{ product.name }}</h3>
@@ -65,8 +68,7 @@
               <span class="original-price" v-if="product.originalPrice > product.currentPrice">¥{{ product.originalPrice }}</span>
             </div>
             <div class="product-meta">
-              <span class="product-condition">{{ formatCondition(product.productCondition) }}</span>
-              <span class="product-status" :class="'status-' + product.status.toLowerCase()">
+              <span class="product-status" :class="getStatusClass(product.status)">
                 {{ getStatusText(product.status) }}
               </span>
             </div>
@@ -233,6 +235,11 @@ const loadMerchantProducts = async () => {
       
       if (products.value.length > 0) {
         console.log('第一个商品样例:', products.value[0]);
+        console.log('商品新旧程度实际值:', products.value[0].productCondition);
+        console.log('所有商品新旧程度值:');
+        products.value.forEach((product, index) => {
+          console.log(`商品${index+1} (${product.name}) 新旧程度:`, product.productCondition);
+        });
       } else {
         console.log('商家暂无商品');
       }
@@ -264,6 +271,12 @@ const getStatusText = (status) => {
   return statusMap[status] || status;
 };
 
+// 获取状态对应的类名
+const getStatusClass = (status) => {
+  if (!status) return '';
+  return `status-${status.toLowerCase()}`;
+};
+
 // 查看商品
 const viewProduct = (id) => {
   router.push(`/product/${id}`);
@@ -281,9 +294,50 @@ const viewOrders = () => {
   console.log('查看订单');
 };
 
+// 获取商品新旧程度对应的类名
+const getConditionClass = (condition) => {
+  if (!condition) return 'condition-unknown';
+  
+  // 检查condition是否是对象（有些API可能返回枚举对象）
+  if (typeof condition === 'object' && condition !== null) {
+    // 尝试从对象中获取可能的值
+    condition = condition.value || condition.name || condition.code || JSON.stringify(condition);
+  }
+  
+  // 转为字符串并转大写，确保匹配
+  const conditionStr = String(condition).toUpperCase();
+  
+  // 使用包含判断而非精确匹配
+  if (conditionStr.includes('NEW') || conditionStr.includes('全新')) return 'condition-new';
+  if (conditionStr.includes('LIKE_NEW') || conditionStr.includes('九成新')) return 'condition-like-new';
+  if (conditionStr.includes('GOOD') || conditionStr.includes('八成新')) return 'condition-good';
+  if (conditionStr.includes('FAIR') || conditionStr.includes('七成新')) return 'condition-fair';
+  if (conditionStr.includes('POOR') || conditionStr.includes('六成新')) return 'condition-poor';
+  
+  return 'condition-unknown';
+};
+
 // 格式化商品新旧程度
 const formatCondition = (condition) => {
   if (!condition) return '未知新旧';
+  
+  // 检查condition是否是对象
+  if (typeof condition === 'object' && condition !== null) {
+    // 尝试从对象中获取值
+    condition = condition.value || condition.name || condition.code || JSON.stringify(condition);
+  }
+  
+  // 转为字符串处理
+  const conditionStr = String(condition);
+  
+  // 判断是否已经是中文
+  if (conditionStr.includes('全新') || conditionStr.includes('九成新') || 
+      conditionStr.includes('八成新') || conditionStr.includes('七成新') || 
+      conditionStr.includes('六成新')) {
+    return conditionStr;
+  }
+  
+  // 英文映射到中文
   const conditionMap = {
     'NEW': '全新',
     'LIKE_NEW': '九成新',
@@ -291,7 +345,16 @@ const formatCondition = (condition) => {
     'FAIR': '七成新',
     'POOR': '六成新及以下'
   };
-  return conditionMap[condition] || condition;
+  
+  // 使用包含判断
+  const conditionUpper = conditionStr.toUpperCase();
+  if (conditionUpper.includes('NEW') && !conditionUpper.includes('LIKE')) return '全新';
+  if (conditionUpper.includes('LIKE_NEW')) return '九成新';
+  if (conditionUpper.includes('GOOD')) return '八成新';
+  if (conditionUpper.includes('FAIR')) return '七成新';
+  if (conditionUpper.includes('POOR')) return '六成新及以下';
+  
+  return conditionMap[conditionUpper] || conditionStr;
 };
 
 // 页面加载时获取数据
@@ -413,20 +476,81 @@ onMounted(() => {
 
 .product-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 20px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 14px;
 }
 
 .product-item {
   border: 1px solid #e0e6f7;
-  border-radius: 10px;
+  border-radius: 8px;
   overflow: hidden;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  background-color: white;
+  position: relative;
+  max-width: 100%;
 }
 
 .product-item:hover {
   box-shadow: 0 6px 16px rgba(0, 0, 0, 0.08);
   transform: translateY(-3px);
+}
+
+/* 增强品质标签样式 */
+.product-condition-badge {
+  position: absolute;
+  left: 0;
+  top: 10px;
+  padding: 4px 10px 4px 8px;
+  border-radius: 0 4px 4px 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.2);
+}
+
+/* 增强商品状态标签 */
+.product-status {
+  display: inline-block;
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-size: 13px;
+  font-weight: 700;
+  border-left: 4px solid transparent;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.15);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
+}
+
+/* 商品新旧程度标签样式 */
+.condition-new.product-condition-badge {
+  background-color: #4caf50;
+  border-right: 3px solid #2e7d32;
+}
+
+.condition-like-new.product-condition-badge {
+  background-color: #2196f3;
+  border-right: 3px solid #1565c0;
+}
+
+.condition-good.product-condition-badge {
+  background-color: #3f51b5;
+  border-right: 3px solid #283593;
+}
+
+.condition-fair.product-condition-badge {
+  background-color: #ff9800;
+  border-right: 3px solid #ef6c00;
+}
+
+.condition-poor.product-condition-badge {
+  background-color: #f44336;
+  border-right: 3px solid #c62828;
+}
+
+.condition-unknown.product-condition-badge {
+  background-color: #9e9e9e;
+  border-right: 3px solid #616161;
 }
 
 .product-image {
@@ -442,20 +566,28 @@ onMounted(() => {
   transition: transform 0.5s ease;
 }
 
-.product-item:hover .product-image img {
-  transform: scale(1.05);
+.negotiable-badge {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  background-color: #ff9800;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .product-info {
-  padding: 15px;
+  padding: 12px;
 }
 
 .product-info h3 {
-  font-size: 16px;
+  font-size: 15px;
+  line-height: 1.3;
   font-weight: 600;
   color: #333;
-  margin-bottom: 10px;
-  /* 文本超出省略号 */
+  margin-bottom: 8px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -464,18 +596,18 @@ onMounted(() => {
 .product-price {
   display: flex;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
 .current-price {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   color: #e53935;
   margin-right: 8px;
 }
 
 .original-price {
-  font-size: 14px;
+  font-size: 13px;
   color: #999;
   text-decoration: line-through;
 }
@@ -483,66 +615,26 @@ onMounted(() => {
 .product-meta {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 8px;
+  margin-bottom: 6px;
 }
 
-.product-condition {
-  background-color: #ebf5ff;
-  color: #4a6ee0;
-  padding: 2px 6px;
-  border-radius: 3px;
+.product-stats {
+  display: flex;
+  justify-content: space-between;
   font-size: 12px;
-  font-weight: 500;
-}
-
-.product-status {
-  font-size: 13px;
-  padding: 3px 8px;
-  border-radius: 4px;
-  display: inline-block;
-  font-weight: 500;
-}
-
-.status-pending_approval {
-  background-color: #e3f2fd;
-  color: #2196f3;
-}
-
-.status-rejected_resubmit {
-  background-color: #ffebee;
-  color: #f44336;
-}
-
-.status-on_sale {
-  background-color: #e8f5e9;
-  color: #4caf50;
-}
-
-.status-locked {
-  background-color: #fffde7;
-  color: #fbc02d;
-}
-
-.status-sold_out {
-  background-color: #f5f5f5;
-  color: #9e9e9e;
-}
-
-.status-removed_by_seller {
-  background-color: #efebe9;
-  color: #795548;
+  color: #666;
 }
 
 .product-actions {
   display: flex;
-  padding: 10px 15px;
+  padding: 8px 12px;
   border-top: 1px solid #e0e6f7;
   background-color: #f8f9fa;
 }
 
 .edit-button, .view-button {
   flex: 1;
-  padding: 8px 0;
+  padding: 7px 0;
   font-size: 14px;
   text-align: center;
   border-radius: 4px;
@@ -620,6 +712,32 @@ onMounted(() => {
   transform: translateY(-2px);
 }
 
+/* 添加半屏幕宽度的响应式设计 */
+@media (max-width: 1200px) and (min-width: 768px) {
+  .product-list {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+  }
+  
+  .product-info h3 {
+    font-size: 14px;
+  }
+  
+  .current-price {
+    font-size: 15px;
+  }
+  
+  .product-actions {
+    padding: 6px 8px;
+  }
+  
+  .edit-button, .view-button {
+    padding: 5px 0;
+    font-size: 13px;
+  }
+}
+
+/* 手机屏幕响应式设计 */
 @media (max-width: 768px) {
   .product-list {
     grid-template-columns: 1fr;
@@ -649,5 +767,42 @@ onMounted(() => {
 .merchant-level {
   color: #4a6ee0;
   font-weight: 500;
+}
+
+/* 商品状态标签样式 */
+.status-pending_approval {
+  background-color: #e3f2fd;
+  color: #1976d2;
+  border-left-color: #1976d2;
+}
+
+.status-rejected_resubmit {
+  background-color: #ffebee;
+  color: #d32f2f;
+  border-left-color: #d32f2f;
+}
+
+.status-on_sale {
+  background-color: #e8f5e9;
+  color: #388e3c;
+  border-left-color: #388e3c;
+}
+
+.status-locked {
+  background-color: #fff8e1;
+  color: #f57c00;
+  border-left-color: #f57c00;
+}
+
+.status-sold_out {
+  background-color: #f5f5f5;
+  color: #616161;
+  border-left-color: #616161;
+}
+
+.status-removed_by_seller {
+  background-color: #efebe9;
+  color: #5d4037;
+  border-left-color: #5d4037;
 }
 </style> 

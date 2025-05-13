@@ -274,13 +274,15 @@ const fetchProductDetail = async (id) => {
 
 // 图片上传成功处理
 const handleUploadSuccess = (response, file, fileList) => {
+  // 由于Element Plus的bug，使用自定义上传时会调用两次on-success回调
+  // 第二次调用时response通常为空，所以我们只处理有效的response
+  if (!response) {
+    console.log('忽略空响应的回调');
+    return;
+  }
+  
   if (response.code === 200 && response.data) {
-    // 添加上传的图片URL到表单
-    productForm.imageUrls = productForm.imageUrls || [];
-    // 使用URL处理函数
-    const imageUrl = response.data;
-    console.log('原始上传图片URL:', imageUrl);
-    productForm.imageUrls.push(imageUrl);
+    console.log('原始上传图片URL:', response.data);
     console.log('图片上传成功，当前图片列表:', productForm.imageUrls);
   } else {
     ElMessage.error('图片上传失败：' + (response.message || '未知错误'));
@@ -321,6 +323,13 @@ const customUpload = async (options) => {
       body: formData
     });
     
+    if (!response.ok) {
+      const errorMsg = `服务器响应错误: ${response.status} ${response.statusText}`;
+      console.error(errorMsg);
+      options.onError(errorMsg);
+      return;
+    }
+    
     const result = await response.json();
     console.log('商品图片上传响应:', result);
     
@@ -329,15 +338,19 @@ const customUpload = async (options) => {
       const originalUrl = result.data[0];
       console.log('服务器返回的原始图片URL:', originalUrl);
       
+      // 直接添加到表单的图片列表中
+      productForm.imageUrls = productForm.imageUrls || [];
+      productForm.imageUrls.push(originalUrl);
+      
       // 调用成功回调
       options.onSuccess({ 
         code: 200, 
         data: originalUrl
       });
     } else {
-      console.error('上传失败，响应:', result);
-      // 调用失败回调
-      options.onError('上传失败：' + (result.message || '未知错误'));
+      const errorMsg = '上传失败：' + (result.message || '未知错误');
+      console.error(errorMsg, result);
+      options.onError(errorMsg);
     }
   } catch (error) {
     console.error('上传出错:', error);
@@ -347,24 +360,66 @@ const customUpload = async (options) => {
 
 // 移除图片
 const handleRemove = (file, fileList) => {
-  // 根据文件查找URL
-  const fileUrl = file.response?.data;
-  if (fileUrl) {
-    const index = productForm.imageUrls.indexOf(fileUrl);
-    if (index !== -1) {
-      productForm.imageUrls.splice(index, 1);
+  try {
+    // 根据文件查找URL - 处理多种可能的数据格式
+    let fileUrl;
+    
+    if (file.response && file.response.data) {
+      // 通过response获取URL
+      fileUrl = file.response.data;
+    } else if (file.url) {
+      // 直接使用文件URL
+      fileUrl = file.url;
     }
+    
+    if (fileUrl) {
+      // 寻找原始URL的可能格式
+      const possibleUrlFormats = [
+        fileUrl,
+        processImageUrl(fileUrl),
+        fileUrl.replace(/^http:\/\/[^\/]+/, '') // 删除域名部分
+      ];
+      
+      // 查找URL并移除
+      for (const url of possibleUrlFormats) {
+        const index = productForm.imageUrls.indexOf(url);
+        if (index !== -1) {
+          productForm.imageUrls.splice(index, 1);
+          console.log('已移除图片URL:', url);
+          break;
+        }
+      }
+    }
+  } catch (error) {
+    console.error('移除图片出错:', error);
   }
 };
 
 // 预览图片
 const handlePictureCardPreview = (file) => {
-  // 根据文件获取预览URL
-  const rawUrl = file.url || (file.response && file.response.data);
-  dialogImageUrl.value = processImageUrl(rawUrl);
-  console.log('预览图片原始URL:', rawUrl);
-  console.log('预览图片处理后URL:', dialogImageUrl.value);
-  dialogVisible.value = true;
+  try {
+    // 根据文件获取预览URL，增强错误处理
+    let rawUrl = null;
+    
+    if (file.url) {
+      rawUrl = file.url;
+    } else if (file.response && file.response.data) {
+      rawUrl = file.response.data;
+    }
+    
+    if (rawUrl) {
+      dialogImageUrl.value = processImageUrl(rawUrl);
+      console.log('预览图片原始URL:', rawUrl);
+      console.log('预览图片处理后URL:', dialogImageUrl.value);
+      dialogVisible.value = true;
+    } else {
+      console.error('无法获取图片预览URL');
+      ElMessage.warning('无法预览图片');
+    }
+  } catch (error) {
+    console.error('预览图片出错:', error);
+    ElMessage.error('图片预览失败');
+  }
 };
 
 // 重置表单
@@ -390,11 +445,25 @@ const submitForm = async () => {
       submitting.value = true;
       
       try {
-        // 使用productCondition字段名，保持后端一致
+        // 将英文枚举值映射为中文
+        const conditionMap = {
+          'NEW': '全新',
+          'LIKE_NEW': '九成新',
+          'GOOD': '八成新',
+          'FAIR': '七成新',
+          'POOR': '六成新及以下'
+        };
+
+        // 使用condition和productCondition字段，确保后端能正确处理
         const submitData = {
           ...productForm,
-          productCondition: productForm.condition
+          // 移除多余字段，避免后端混淆
+          condition: undefined,
+          // 设置正确的枚举值，使用中文描述
+          productCondition: conditionMap[productForm.condition]
         };
+        
+        console.log('准备提交商品数据:', submitData);
         
         let response;
         if (isEdit.value) {
@@ -425,20 +494,30 @@ const submitForm = async () => {
 
 // 获取初始文件列表（编辑模式下使用）
 const getInitialFileList = () => {
-  if (!isEdit.value || !productForm.imageUrls || productForm.imageUrls.length === 0) {
+  try {
+    if (!isEdit.value || !productForm.imageUrls || productForm.imageUrls.length === 0) {
+      return [];
+    }
+    
+    // 将URL转换为文件列表格式
+    return productForm.imageUrls.map((url, index) => {
+      console.log('初始化商品图片URL:', url);
+      if (!url) {
+        console.warn('发现空URL，已跳过');
+        return null;
+      }
+      
+      const processedUrl = processImageUrl(url);
+      console.log('处理后的商品图片URL:', processedUrl);
+      return {
+        name: `图片${index + 1}`,
+        url: processedUrl
+      };
+    }).filter(item => item !== null); // 过滤掉空项
+  } catch (error) {
+    console.error('获取初始文件列表出错:', error);
     return [];
   }
-  
-  // 将URL转换为文件列表格式
-  return productForm.imageUrls.map((url, index) => {
-    console.log('初始化商品图片URL:', url);
-    const processedUrl = processImageUrl(url);
-    console.log('处理后的商品图片URL:', processedUrl);
-    return {
-      name: `图片${index + 1}`,
-      url: processedUrl
-    };
-  });
 };
 
 // 页面初始化
