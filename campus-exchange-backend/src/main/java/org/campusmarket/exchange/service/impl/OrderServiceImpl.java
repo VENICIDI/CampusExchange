@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
+import org.campusmarket.exchange.controller.OrderController;
 import org.campusmarket.exchange.dto.*;
 import org.campusmarket.exchange.entity.*;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
@@ -15,6 +16,7 @@ import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.*;
 import org.campusmarket.exchange.service.IOrderService;
 import org.campusmarket.exchange.service.IProductService;
+import org.campusmarket.exchange.service.ICartService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -27,6 +29,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.stream.Collectors;
+import java.util.Map;
+import java.util.HashMap;
 
 /**
  * 订单服务实现类
@@ -52,6 +56,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     
     @Resource
     private IProductService productService;
+    
+    @Resource
+    private ICartService cartService;
 
     /**
      * 创建订单
@@ -167,25 +174,20 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                 ));
             }
         } else {
-            // 处理快递信息
+            // 处理快递信息 - 注意：数据库中不存在收货人相关字段
             if (orderDTO.getAddress() != null) {
                 // 使用用户提交的地址
                 OrderCreateDTO.OrderAddressDTO addressDTO = orderDTO.getAddress();
-                order.setReceiverName(addressDTO.getReceiverName());
-                order.setReceiverPhone(addressDTO.getReceiverPhone());
-                order.setReceiverAddress(addressDTO.getProvince() + " " + 
-                        addressDTO.getCity() + " " + 
-                        addressDTO.getDistrict() + " " + 
-                        addressDTO.getDetailAddress());
+                // 注释掉不存在的字段设置
+                // order.setReceiverName(addressDTO.getReceiverName());
+                // order.setReceiverPhone(addressDTO.getReceiverPhone());
+                // order.setReceiverAddress(addressDTO.getFullAddress());
                 
                 // 如果设置为默认地址，则更新用户的默认地址
                 if (Boolean.TRUE.equals(addressDTO.getIsDefault())) {
                     String defaultAddress = addressDTO.getReceiverName() + "," + 
                             addressDTO.getReceiverPhone() + "," + 
-                            addressDTO.getProvince() + "," + 
-                            addressDTO.getCity() + "," + 
-                            addressDTO.getDistrict() + "," + 
-                            addressDTO.getDetailAddress();
+                            addressDTO.getFullAddress();
                     
                     User updateUser = new User();
                     updateUser.setId(userId);
@@ -195,14 +197,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             } else if (user.getDefaultAddress() != null && !user.getDefaultAddress().isEmpty()) {
                 // 使用用户默认地址
                 String[] addressParts = user.getDefaultAddress().split(",");
-                if (addressParts.length >= 6) {
-                    order.setReceiverName(addressParts[0]);
-                    order.setReceiverPhone(addressParts[1]);
-                    order.setReceiverAddress(addressParts[2] + " " + 
-                            addressParts[3] + " " + 
-                            addressParts[4] + " " + 
-                            addressParts[5]);
-                }
+                // 注释掉不存在的字段设置
+                // if (addressParts.length >= 3) {
+                //     order.setReceiverName(addressParts[0]);
+                //     order.setReceiverPhone(addressParts[1]);
+                //     order.setReceiverAddress(addressParts[2]);
+                // }
             } else {
                 throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "快递交易必须提供收货地址");
             }
@@ -227,6 +227,308 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         log.info("订单创建成功，订单号: {}", orderNo);
         return orderNo;
+    }
+
+    /**
+     * 从购物车创建订单 (按商家拆分)
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> createOrderFromCart(Long userId, Integer pointsUsed, TradeTypeEnum tradeType, 
+                                           String offlineMeetingLocation, String offlineMeetingTime) {
+        log.info("用户[{}]从购物车创建订单, 使用积分:{}, 交易方式:{}", userId, pointsUsed, tradeType);
+        
+        // 1. 校验用户是否存在
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "用户不存在");
+        }
+        
+        // 2. 获取购物车中已选中的商品，按商家分组
+        Map<Long, List<CartItem>> merchantItemsMap = cartService.getSelectedCartItemsByMerchant(userId);
+        if (merchantItemsMap.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "购物车中没有选中的商品");
+        }
+        
+        // 3. 校验线下交易信息
+        if (tradeType == TradeTypeEnum.OFFLINE) {
+            if (offlineMeetingLocation == null || offlineMeetingLocation.isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "线下交易地点不能为空");
+            }
+            if (offlineMeetingTime == null || offlineMeetingTime.isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "线下交易时间不能为空");
+            }
+        }
+        
+        // 4. 校验快递交易是否有默认地址
+        if (tradeType == TradeTypeEnum.EXPRESS) {
+            if (user.getDefaultAddress() == null || user.getDefaultAddress().isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "快递交易必须设置默认收货地址");
+            }
+        }
+
+        return createOrderFromCart(userId, pointsUsed, tradeType, offlineMeetingLocation, offlineMeetingTime, null);
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public List<String> createOrderFromCart(Long userId, Integer pointsUsed, TradeTypeEnum tradeType, 
+                                           String offlineMeetingLocation, String offlineMeetingTime,
+                                           Object addressObj) {
+        log.info("用户[{}]从购物车创建订单, 使用积分:{}, 交易方式:{}", userId, pointsUsed, tradeType);
+        
+        // 1. 校验用户是否存在
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "用户不存在");
+        }
+        
+        // 2. 获取购物车中已选中的商品，按商家分组
+        Map<Long, List<CartItem>> merchantItemsMap = cartService.getSelectedCartItemsByMerchant(userId);
+        if (merchantItemsMap.isEmpty()) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "购物车中没有选中的商品");
+        }
+        
+        // 3. 校验线下交易信息
+        if (tradeType == TradeTypeEnum.OFFLINE) {
+            if (offlineMeetingLocation == null || offlineMeetingLocation.isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "线下交易地点不能为空");
+            }
+            if (offlineMeetingTime == null || offlineMeetingTime.isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "线下交易时间不能为空");
+            }
+        }
+        
+        // 4. 校验快递交易是否有地址信息
+        if (tradeType == TradeTypeEnum.EXPRESS && addressObj == null) {
+            if (user.getDefaultAddress() == null || user.getDefaultAddress().isEmpty()) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "快递交易必须设置收货地址");
+            }
+        }
+        
+        // 5. 计算总金额，检查积分是否足够
+        BigDecimal totalAmount = BigDecimal.ZERO;
+        for (List<CartItem> items : merchantItemsMap.values()) {
+            for (CartItem item : items) {
+                Product product = item.getProduct();
+                if (product == null) {
+                    continue;
+                }
+                
+                totalAmount = totalAmount.add(product.getCurrentPrice().multiply(new BigDecimal(item.getQuantity())));
+            }
+        }
+        
+        // 6. 计算积分抵扣金额 (按100积分=1元计算，无上限)
+        BigDecimal pointsDeductionAmount = BigDecimal.ZERO;
+        if (pointsUsed != null && pointsUsed > 0) {
+            // 每100积分抵扣1元
+            BigDecimal pointRate = new BigDecimal("0.01");
+            pointsDeductionAmount = new BigDecimal(pointsUsed).multiply(pointRate);
+            
+            // 积分抵扣不能超过订单总金额
+            if (pointsDeductionAmount.compareTo(totalAmount) > 0) {
+                pointsDeductionAmount = totalAmount;
+            }
+        }
+        
+        // 7. 为每个商家创建订单
+        List<String> orderNos = new ArrayList<>();
+        
+        // 分配积分抵扣金额到各个订单
+        // 按每个订单金额占比分配积分抵扣
+        Map<Long, BigDecimal> merchantOrderAmounts = new HashMap<>();
+        for (Long merchantId : merchantItemsMap.keySet()) {
+            BigDecimal merchantTotal = BigDecimal.ZERO;
+            List<CartItem> items = merchantItemsMap.get(merchantId);
+            for (CartItem item : items) {
+                Product product = item.getProduct();
+                if (product == null) {
+                    continue;
+                }
+                
+                merchantTotal = merchantTotal.add(product.getCurrentPrice().multiply(new BigDecimal(item.getQuantity())));
+            }
+            merchantOrderAmounts.put(merchantId, merchantTotal);
+        }
+        
+        // 分配积分抵扣
+        Map<Long, BigDecimal> merchantPointsDeductions = new HashMap<>();
+        for (Long merchantId : merchantOrderAmounts.keySet()) {
+            BigDecimal orderAmount = merchantOrderAmounts.get(merchantId);
+            BigDecimal ratio = orderAmount.divide(totalAmount, 10, BigDecimal.ROUND_HALF_UP);
+            BigDecimal deduction = pointsDeductionAmount.multiply(ratio).setScale(2, BigDecimal.ROUND_HALF_UP);
+            merchantPointsDeductions.put(merchantId, deduction);
+        }
+        
+        // 处理可能的舍入误差，确保总抵扣金额等于计算的积分抵扣金额
+        BigDecimal totalDeductions = merchantPointsDeductions.values().stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        
+        if (totalDeductions.compareTo(pointsDeductionAmount) != 0) {
+            BigDecimal diff = pointsDeductionAmount.subtract(totalDeductions);
+            // 将差额加到第一个订单
+            if (!merchantPointsDeductions.isEmpty()) {
+                Long firstMerchantId = merchantPointsDeductions.keySet().iterator().next();
+                BigDecimal currentDeduction = merchantPointsDeductions.get(firstMerchantId);
+                merchantPointsDeductions.put(firstMerchantId, currentDeduction.add(diff));
+            }
+        }
+        
+        // 计算积分使用数量到各个订单的分配
+        // 每100积分抵扣1元，按抵扣金额反推
+        Map<Long, Integer> merchantPointsUsed = new HashMap<>();
+        for (Long merchantId : merchantPointsDeductions.keySet()) {
+            BigDecimal deduction = merchantPointsDeductions.get(merchantId);
+            // 每0.01元等于1积分
+            Integer points = deduction.multiply(new BigDecimal(100)).intValue();
+            merchantPointsUsed.put(merchantId, points);
+        }
+        
+        // 提取地址信息
+        String receiverName = null;
+        String receiverPhone = null;
+        String receiverAddress = null;
+        
+        // 解析自定义地址信息
+        if (addressObj != null && addressObj instanceof OrderController.CartOrderDTO.OrderAddressDTO) {
+            OrderController.CartOrderDTO.OrderAddressDTO address = (OrderController.CartOrderDTO.OrderAddressDTO) addressObj;
+            receiverName = address.getReceiverName();
+            receiverPhone = address.getReceiverPhone();
+            receiverAddress = address.getFullAddress();
+            
+            // 如果设置为默认地址，更新用户默认地址
+            if (Boolean.TRUE.equals(address.getIsDefault())) {
+                String defaultAddress = address.getReceiverName() + "," + 
+                        address.getReceiverPhone() + "," + 
+                        address.getFullAddress();
+                
+                User updateUser = new User();
+                updateUser.setId(userId);
+                updateUser.setDefaultAddress(defaultAddress);
+                userMapper.updateById(updateUser);
+            }
+        } else if (user.getDefaultAddress() != null && !user.getDefaultAddress().isEmpty()) {
+            // 使用用户默认地址
+            String[] addressParts = user.getDefaultAddress().split(",");
+            if (addressParts.length >= 3) {
+                receiverName = addressParts[0];
+                receiverPhone = addressParts[1];
+                receiverAddress = addressParts[2];
+            }
+        }
+        
+        // 为每个商家创建订单
+        for (Long merchantId : merchantItemsMap.keySet()) {
+            List<CartItem> items = merchantItemsMap.get(merchantId);
+            
+            // 生成订单号
+            String orderNo = generateOrderNo();
+            orderNos.add(orderNo);
+            
+            // 创建订单
+            Order order = new Order();
+            order.setOrderNo(orderNo);
+            order.setUserId(userId);
+            order.setMerchantId(merchantId);
+            
+            // 计算订单商品总金额
+            BigDecimal totalProductAmount = merchantOrderAmounts.get(merchantId);
+            order.setTotalProductAmount(totalProductAmount);
+            
+            // 设置积分抵扣信息
+            Integer orderPointsUsed = merchantPointsUsed.getOrDefault(merchantId, 0);
+            BigDecimal orderPointsDeduction = merchantPointsDeductions.getOrDefault(merchantId, BigDecimal.ZERO);
+            order.setPointsUsed(orderPointsUsed);
+            order.setPointsDeductionAmount(orderPointsDeduction);
+            
+            // 计算实际支付金额
+            BigDecimal actualPaymentAmount = totalProductAmount.subtract(orderPointsDeduction);
+            if (actualPaymentAmount.compareTo(BigDecimal.ZERO) < 0) {
+                actualPaymentAmount = BigDecimal.ZERO;
+            }
+            order.setActualPaymentAmount(actualPaymentAmount);
+            
+            // 设置平台手续费 (假设为商品总金额的5%)
+            BigDecimal platformCommissionRate = new BigDecimal("0.05");
+            BigDecimal platformCommissionAmount = totalProductAmount.multiply(platformCommissionRate);
+            order.setPlatformCommissionAmount(platformCommissionAmount);
+            
+            // 设置订单状态
+            order.setStatus(OrderStatusEnum.PENDING_PAYMENT);
+            order.setTradeType(tradeType);
+            
+            // 处理线下交易信息或收货信息
+            if (tradeType == TradeTypeEnum.OFFLINE) {
+                order.setOfflineMeetingLocation(offlineMeetingLocation);
+                order.setOfflineMeetingTime(LocalDateTime.parse(
+                        offlineMeetingTime,
+                        DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
+                ));
+            } else {
+                // 快递交易，设置收货信息 - 注意：数据库中不存在收货人相关字段
+                // if (receiverName != null && receiverPhone != null && receiverAddress != null) {
+                //     order.setReceiverName(receiverName);
+                //     order.setReceiverPhone(receiverPhone);
+                //     order.setReceiverAddress(receiverAddress);
+                // }
+            }
+            
+            order.setCreateTime(LocalDateTime.now());
+            order.setUpdateTime(LocalDateTime.now());
+            
+            // 保存订单
+            orderMapper.insert(order);
+            
+            // 创建订单项
+            List<OrderItem> orderItems = new ArrayList<>();
+            for (CartItem cartItem : items) {
+                Product product = cartItem.getProduct();
+                if (product == null) {
+                    continue;
+                }
+                
+                // 检查库存
+                if (product.getStock() < cartItem.getQuantity()) {
+                    throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
+                            "商品[" + product.getName() + "]库存不足，当前库存:" + product.getStock());
+                }
+                
+                // 创建订单项
+                OrderItem orderItem = new OrderItem();
+                orderItem.setOrderId(order.getId());
+                orderItem.setProductId(product.getId());
+                orderItem.setMerchantId(product.getMerchantId());
+                orderItem.setProductNameSnapshot(product.getName());
+                // 获取商品主图 - 此处简化处理
+                orderItem.setProductImageSnapshot(null);
+                orderItem.setPriceAtPurchase(product.getCurrentPrice());
+                orderItem.setQuantity(cartItem.getQuantity());
+                
+                // 计算商品小计
+                BigDecimal subtotal = product.getCurrentPrice().multiply(new BigDecimal(cartItem.getQuantity()));
+                orderItem.setItemTotalAmount(subtotal);
+                
+                // 设置手续费
+                orderItem.setCommissionRateSnapshot(platformCommissionRate);
+                orderItem.setCommissionAmountSnapshot(subtotal.multiply(platformCommissionRate));
+                
+                orderItem.setReviewStatus(ReviewStatusEnum.NOT_REVIEWED);
+                orderItem.setCreateTime(LocalDateTime.now());
+                
+                orderItems.add(orderItem);
+                orderItemMapper.insert(orderItem);
+                
+                // 减少商品库存
+                productService.decreaseStock(product.getId(), cartItem.getQuantity());
+            }
+        }
+        
+        // 8. 清空购物车中已选中的商品
+        cartService.clearSelectedCartItems(userId);
+        
+        log.info("用户[{}]从购物车创建订单成功，订单号: {}", userId, orderNos);
+        return orderNos;
     }
 
     /**
@@ -383,7 +685,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         // 2. 校验订单状态
         if (order.getStatus() != OrderStatusEnum.PENDING_PAYMENT) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
-                    "订单状态不正确，当前状态: " + order.getStatus().getDesc());
+                    "只有待付款订单才能支付，当前状态: " + order.getStatus().getDesc());
         }
         
         // 3. 更新订单状态
@@ -443,7 +745,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean shipOrder(Long merchantId, String orderNo, String trackingNo, String expressCompany) {
-        log.info("商家[{}]发货: {}, 快递单号: {}, 快递公司: {}", merchantId, orderNo, trackingNo, expressCompany);
+        log.info("商家[{}]发货: {}", merchantId, orderNo);
+        // 不再记录不存在的字段
+        // log.info("商家[{}]发货: {}, 快递单号: {}, 快递公司: {}", merchantId, orderNo, trackingNo, expressCompany);
         
         // 1. 查询订单
         LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
@@ -461,13 +765,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     "只有待发货订单才能发货，当前状态: " + order.getStatus().getDesc());
         }
         
-        // 3. 更新订单状态和发货信息
+        // 3. 更新订单状态
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
         updateOrder.setStatus(OrderStatusEnum.SHIPPED);
         updateOrder.setShippingTime(LocalDateTime.now());
-        updateOrder.setTrackingNo(trackingNo);
-        updateOrder.setExpressCompany(expressCompany);
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);

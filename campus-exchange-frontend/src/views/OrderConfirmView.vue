@@ -1,187 +1,193 @@
 <template>
   <div class="order-confirm-container">
-    <div class="container py-5">
-      <h2 class="mb-4">确认订单</h2>
+    <div class="container">
+      <div class="order-title">
+        <h4>确认订单</h4>
+      </div>
       
       <!-- 加载中状态 -->
-      <div v-if="loading" class="text-center py-5">
-        <div class="spinner-border text-primary" role="status">
-          <span class="visually-hidden">加载中...</span>
-        </div>
-        <p class="mt-2">正在准备订单信息...</p>
+      <div v-if="loading" class="loading-wrapper">
+        <div class="spinner"></div>
+        <p class="loading-text">正在准备订单信息...</p>
       </div>
       
       <!-- 错误状态 -->
-      <div v-else-if="error" class="alert alert-danger">
-        {{ error }}
-        <button @click="goBack" class="btn btn-outline-primary ms-3">返回上一页</button>
+      <div v-else-if="error" class="error-wrapper">
+        <div class="error-message">
+          <i class="fas fa-exclamation-circle me-2"></i>{{ error }}
+        </div>
+        <div class="back-button-wrapper">
+          <button @click="goBack" class="btn-back">
+            <i class="fas fa-arrow-left me-1"></i>返回上一页
+          </button>
+        </div>
       </div>
       
       <!-- 订单确认信息 -->
-      <div v-else class="order-confirm-content">
-        <!-- 商品信息 -->
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0">商品信息</h5>
+      <div v-else class="order-content">
+        <!-- 收货信息 -->
+        <div class="order-section delivery-section">
+          <div class="section-header">
+            <h5 class="section-title">收货信息</h5>
+            <div class="trade-type-switch">
+              <input class="switch-input" type="checkbox" id="pickupSwitch" v-model="isOfflineTrade">
+              <label class="switch-label" for="pickupSwitch">线下交易</label>
+            </div>
           </div>
-          <div class="card-body">
-            <div class="product-item d-flex align-items-center">
-              <img :src="orderPreview.productImage || 'https://via.placeholder.com/80'" :alt="orderPreview.productName" class="product-image me-3">
-              <div class="product-info flex-grow-1">
-                <h5 class="product-name">{{ orderPreview.productName }}</h5>
-                <div class="product-seller text-muted">卖家: {{ orderPreview.sellerName }}</div>
+          
+          <!-- 快递配送 -->
+          <div v-if="!isOfflineTrade" class="delivery-content">
+            <div v-if="hasAddress" class="address-card">
+              <div class="address-info">
+                <div class="recipient-info">
+                  <span class="recipient-name">{{ address.recipient }}</span>
+                  <span class="recipient-phone">{{ address.phone }}</span>
+                  <span class="default-tag">默认</span>
+                </div>
+                <div class="address-detail">{{ address.fullAddress }}</div>
               </div>
-              <div class="product-price-qty text-end">
-                <div class="price text-danger fw-bold">¥{{ orderPreview.price }}</div>
-                <div class="quantity">x {{ orderPreview.quantity }}</div>
+              <div class="address-actions">
+                <button @click="openEditAddress" class="btn-edit-address">
+                  <i class="fas fa-edit"></i> 修改
+                </button>
               </div>
+            </div>
+            
+            <div v-else class="no-address-card">
+              <div class="no-address-tip">
+                <i class="fas fa-map-marker-alt"></i>
+                <span>您还没有收货地址</span>
+              </div>
+              <button @click="openEditAddress" class="btn-add-address">
+                添加收货地址
+              </button>
+            </div>
+            
+            <!-- 编辑地址表单 -->
+            <div v-if="showEditAddressForm" class="address-form">
+              <div class="form-header">
+                <h6 class="form-title">{{ hasAddress ? '修改地址' : '添加地址' }}</h6>
+                <button @click="showEditAddressForm = false" class="btn-close-form">
+                  <i class="fas fa-times"></i>
+                </button>
+              </div>
+              <div class="form-content">
+                <div class="form-row">
+                  <div class="form-group">
+                    <label for="recipient">收件人</label>
+                    <input type="text" id="recipient" v-model="editAddress.recipient" 
+                         :placeholder="userInfo.realName || '请输入收件人姓名'">
+                  </div>
+                  <div class="form-group">
+                    <label for="phone">手机号码</label>
+                    <input type="text" id="phone" v-model="editAddress.phone" 
+                         :placeholder="userInfo.phone || '请输入手机号码'">
+                  </div>
+                </div>
+                <div class="form-group">
+                  <label for="fullAddress">详细地址</label>
+                  <input type="text" id="fullAddress" v-model="editAddress.fullAddress" 
+                         placeholder="请输入完整的收货地址">
+                </div>
+                <div class="form-action">
+                  <button class="btn-save-address" @click="saveAddress">
+                    保存地址
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 线下交易 -->
+          <div v-else class="offline-trade-form">
+            <div class="form-group">
+              <label for="meetingLocation">线下交易地点</label>
+              <input type="text" id="meetingLocation" 
+                     v-model="offlineTradeInfo.meetingLocation" 
+                     placeholder="请输入详细的线下交易地点，如学校某教学楼">
+            </div>
+            <div class="form-group">
+              <label for="meetingTime">线下交易时间</label>
+              <input type="datetime-local" id="meetingTime" 
+                     v-model="offlineTradeInfo.meetingTime">
+              <small class="form-tip">请选择合适的交易时间</small>
             </div>
           </div>
         </div>
         
-        <!-- 收货信息 -->
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h5 class="mb-0">收货信息</h5>
-            <div class="form-check form-switch">
-              <input class="form-check-input" type="checkbox" id="pickupSwitch" v-model="isOfflineTrade">
-              <label class="form-check-label" for="pickupSwitch">线下交易</label>
+        <!-- 商品信息 -->
+        <div class="order-section product-section">
+          <h5 class="section-title">商品信息</h5>
+          <div class="product-card">
+            <div class="product-image">
+              <img :src="orderPreview.productImage || 'https://via.placeholder.com/80'" 
+                   :alt="orderPreview.productName">
             </div>
-          </div>
-          <div class="card-body">
-            <!-- 快递配送 -->
-            <div v-if="!isOfflineTrade">
-              <div v-if="addresses.length > 0">
-                <div v-for="(address, index) in addresses" :key="index" class="address-item mb-3">
-                  <div class="form-check">
-                    <input 
-                      class="form-check-input" 
-                      type="radio" 
-                      :id="`address-${index}`" 
-                      :value="index" 
-                      v-model="selectedAddressIndex"
-                    >
-                    <label class="form-check-label" :for="`address-${index}`">
-                      <div class="address-content">
-                        <div class="address-user mb-1">{{ address.recipient }} {{ address.phone }}</div>
-                        <div class="address-detail text-muted">
-                          {{ address.province }} {{ address.city }} {{ address.district }} {{ address.detailAddress }}
-                        </div>
-                      </div>
-                    </label>
-                  </div>
-                </div>
+            <div class="product-info">
+              <h5 class="product-name">{{ orderPreview.productName }}</h5>
+              <div class="product-seller">
+                <i class="fas fa-store-alt"></i> {{ orderPreview.sellerName }}
               </div>
-              <div v-else class="no-address alert alert-warning">
-                您还没有收货地址，请先添加收货地址
-              </div>
-              
-              <button @click="showAddAddressForm = true" class="btn btn-outline-primary mt-2">
-                <i class="fas fa-plus me-1"></i> 添加新地址
-              </button>
-              
-              <!-- 添加地址表单 -->
-              <div v-if="showAddAddressForm" class="add-address-form mt-3 p-3 border rounded">
-                <h6 class="mb-3">添加新地址</h6>
-                <div class="row g-3">
-                  <div class="col-md-6">
-                    <label for="recipient" class="form-label">收件人</label>
-                    <input type="text" class="form-control" id="recipient" v-model="newAddress.recipient">
-                  </div>
-                  <div class="col-md-6">
-                    <label for="phone" class="form-label">手机号码</label>
-                    <input type="text" class="form-control" id="phone" v-model="newAddress.phone">
-                  </div>
-                  <div class="col-md-4">
-                    <label for="province" class="form-label">省份</label>
-                    <input type="text" class="form-control" id="province" v-model="newAddress.province">
-                  </div>
-                  <div class="col-md-4">
-                    <label for="city" class="form-label">城市</label>
-                    <input type="text" class="form-control" id="city" v-model="newAddress.city">
-                  </div>
-                  <div class="col-md-4">
-                    <label for="district" class="form-label">区/县</label>
-                    <input type="text" class="form-control" id="district" v-model="newAddress.district">
-                  </div>
-                  <div class="col-12">
-                    <label for="detailAddress" class="form-label">详细地址</label>
-                    <input type="text" class="form-control" id="detailAddress" v-model="newAddress.detailAddress">
-                  </div>
-                  <div class="col-12 mt-3 d-flex justify-content-end">
-                    <button type="button" class="btn btn-secondary me-2" @click="showAddAddressForm = false">取消</button>
-                    <button type="button" class="btn btn-primary" @click="addNewAddress">保存地址</button>
-                  </div>
-                </div>
+              <div class="product-stock" :class="stockStatus.class">
+                <i class="fas" :class="stockStatus.hasStock ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                {{ stockStatus.text }}
               </div>
             </div>
-            
-            <!-- 线下交易 -->
-            <div v-else>
-              <div class="mb-3">
-                <label for="meetingLocation" class="form-label">交易地点</label>
-                <input type="text" class="form-control" id="meetingLocation" v-model="offlineTradeInfo.meetingLocation" placeholder="请输入线下交易地点">
-              </div>
-              <div class="mb-3">
-                <label for="meetingTime" class="form-label">交易时间</label>
-                <input type="datetime-local" class="form-control" id="meetingTime" v-model="offlineTradeInfo.meetingTime">
+            <div class="product-price-wrapper">
+              <div class="product-price">¥{{ orderPreview.price.toFixed(2) }}</div>
+              <div class="quantity-selector">
+                <button class="quantity-btn minus" 
+                        @click="updateQuantity(quantity - 1)" 
+                        :disabled="quantity <= 1">−</button>
+                <input type="text" class="quantity-input" v-model.number="quantity"
+                       @change="updateQuantity(quantity)" />
+                <button class="quantity-btn plus" 
+                        @click="updateQuantity(quantity + 1)" 
+                        :disabled="quantity >= maxQuantity">+</button>
               </div>
             </div>
           </div>
         </div>
         
         <!-- 支付信息 -->
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0">支付信息</h5>
-          </div>
-          <div class="card-body">
-            <div class="d-flex justify-content-between mb-3">
-              <span>商品金额</span>
-              <span>¥{{ orderPreview.price * orderPreview.quantity }}</span>
+        <div class="order-section payment-section">
+          <h5 class="section-title">支付信息</h5>
+          <div class="payment-card">
+            <div class="payment-item">
+              <span class="payment-label">商品金额</span>
+              <span class="payment-value">¥{{ (orderPreview.price * quantity).toFixed(2) }}</span>
             </div>
-            <div class="d-flex justify-content-between mb-3">
-              <span>运费</span>
-              <span>¥{{ isOfflineTrade ? 0 : shippingFee }}</span>
+            <div class="payment-item">
+              <span class="payment-label">运费</span>
+              <span class="payment-value">¥{{ isOfflineTrade ? '0.00' : shippingFee.toFixed(2) }}</span>
             </div>
-            <div class="d-flex justify-content-between mb-3">
-              <span>平台服务费</span>
-              <span>¥{{ serviceFee }}</span>
+            <div class="payment-item">
+              <span class="payment-label">平台服务费</span>
+              <span class="payment-value">¥{{ serviceFee.toFixed(2) }}</span>
             </div>
-            <hr/>
-            <div class="d-flex justify-content-between fw-bold">
-              <span>实付金额</span>
-              <span class="text-danger">¥{{ totalAmount }}</span>
+            <div class="payment-total">
+              <span class="total-label">实付金额</span>
+              <span class="total-value">¥{{ totalAmount.toFixed(2) }}</span>
             </div>
-          </div>
-        </div>
-        
-        <!-- 订单备注 -->
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0">订单备注</h5>
-          </div>
-          <div class="card-body">
-            <textarea class="form-control" rows="3" placeholder="填写订单备注信息" v-model="orderRemark"></textarea>
           </div>
         </div>
         
         <!-- 提交订单 -->
-        <div class="order-submit d-flex justify-content-between align-items-center">
-          <div class="order-total">
-            <span class="me-3">共{{ orderPreview.quantity }}件商品</span>
-            <span class="total-price">合计：<strong class="text-danger fs-4">¥{{ totalAmount }}</strong></span>
+        <div class="order-submit-section">
+          <div class="order-summary">
+            <span class="order-count">共{{ quantity }}件商品</span>
+            <span class="order-amount">合计：<strong>¥{{ totalAmount.toFixed(2) }}</strong></span>
           </div>
-          <button 
-            class="btn btn-danger btn-lg" 
-            @click="submitOrder" 
-            :disabled="submitting || !canSubmit"
-          >
+          <button class="btn-submit" 
+                  @click="submitOrder" 
+                  :disabled="submitting || !canSubmit">
             <span v-if="submitting">
               <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
               提交中...
             </span>
-            <span v-else>提交订单</span>
+            <span v-else>
+              提交订单
+            </span>
           </button>
         </div>
       </div>
@@ -192,7 +198,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { orderApi } from '@/api/all';
+import { orderApi, userApi, productApi } from '@/api/all';
 import { ElMessage } from 'element-plus';
 
 const router = useRouter();
@@ -203,19 +209,56 @@ const submitting = ref(false);
 // 订单预览信息（从本地存储获取）
 const orderPreview = ref({});
 
-// 收货地址
-const addresses = ref([]);
-const selectedAddressIndex = ref(0);
+// 用户信息
+const userInfo = ref({
+  realName: '',
+  phone: '',
+});
 
-// 新增地址表单
-const showAddAddressForm = ref(false);
-const newAddress = reactive({
+// 商品数量相关
+const quantity = ref(1); // 默认购买数量为1
+const maxQuantity = ref(1); // 最大可购买数量（基于库存）
+
+// 检查商品库存状态
+const stockStatus = computed(() => {
+  if (!orderPreview.value.stock) {
+    return { hasStock: false, text: '库存不足', class: 'out-of-stock' };
+  }
+  
+  if (orderPreview.value.stock <= 5) {
+    return { hasStock: true, text: `库存紧张，仅剩${orderPreview.value.stock}件`, class: 'low-stock' };
+  }
+  
+  return { hasStock: true, text: `库存充足，${orderPreview.value.stock}件可售`, class: 'in-stock' };
+});
+
+// 判断是否可以提交订单
+const canSubmit = computed(() => {
+  // 首先检查库存是否充足
+  if (!orderPreview.value.stock || orderPreview.value.stock < quantity.value) {
+    return false;
+  }
+
+  if (isOfflineTrade.value) {
+    return offlineTradeInfo.meetingLocation && offlineTradeInfo.meetingTime;
+  } else {
+    return address.value.recipient && address.value.phone && address.value.fullAddress;
+  }
+});
+
+// 收货地址（只保留一个）
+const address = ref({
   recipient: '',
   phone: '',
-  province: '',
-  city: '',
-  district: '',
-  detailAddress: ''
+  fullAddress: ''
+});
+
+// 编辑地址表单
+const showEditAddressForm = ref(false);
+const editAddress = reactive({
+  recipient: '',
+  phone: '',
+  fullAddress: ''
 });
 
 // 线下交易信息
@@ -225,27 +268,20 @@ const offlineTradeInfo = reactive({
   meetingTime: ''
 });
 
-// 订单备注
-const orderRemark = ref('');
-
 // 费用信息
 const shippingFee = ref(0); // 运费
 const serviceFee = ref(0); // 平台服务费
 
 // 计算总金额
 const totalAmount = computed(() => {
-  const productTotal = orderPreview.value.price * orderPreview.value.quantity;
+  const productTotal = orderPreview.value.price * quantity.value;
   const shipping = isOfflineTrade.value ? 0 : shippingFee.value;
   return productTotal + shipping + serviceFee.value;
 });
 
-// 判断是否可以提交订单
-const canSubmit = computed(() => {
-  if (isOfflineTrade.value) {
-    return offlineTradeInfo.meetingLocation && offlineTradeInfo.meetingTime;
-  } else {
-    return addresses.value.length > 0;
-  }
+// 判断是否有收货地址
+const hasAddress = computed(() => {
+  return address.value.recipient && address.value.phone && address.value.fullAddress;
 });
 
 // 加载数据
@@ -263,30 +299,70 @@ const loadData = async () => {
     
     orderPreview.value = JSON.parse(previewData);
     
-    // TODO: 从后端加载用户的收货地址
-    // 这里暂时使用模拟数据
-    addresses.value = [
-      {
-        recipient: '张三',
-        phone: '13800138000',
-        province: '北京市',
-        city: '北京市',
-        district: '海淀区',
-        detailAddress: '清华大学计算机科学与技术系'
-      },
-      {
-        recipient: '李四',
-        phone: '13900139000',
-        province: '上海市',
-        city: '上海市',
-        district: '浦东新区',
-        detailAddress: '复旦大学软件学院'
+    // 设置最大可购买数量
+    if (orderPreview.value.stock) {
+      maxQuantity.value = orderPreview.value.stock;
+      // 确保当前数量不超过库存
+      if (quantity.value > maxQuantity.value) {
+        quantity.value = maxQuantity.value;
       }
-    ];
+    } else {
+      // 如果没有库存信息，尝试从后端获取最新商品信息
+      try {
+        const productResponse = await productApi.getProductById(orderPreview.value.productId);
+        if (productResponse.data && productResponse.data.code === 200) {
+          const productData = productResponse.data.data;
+          // 更新库存信息
+          orderPreview.value.stock = productData.stock;
+          maxQuantity.value = productData.stock;
+          // 确保数量不超过库存
+          if (quantity.value > maxQuantity.value) {
+            quantity.value = maxQuantity.value;
+          }
+        }
+      } catch (err) {
+        console.error('获取商品库存信息失败:', err);
+      }
+    }
+    
+    // 从后端获取当前用户的信息和收货地址
+    try {
+      const response = await userApi.getUserProfile();
+      if (response.data && response.data.code === 200) {
+        const userData = response.data.data;
+        if (userData) {
+          // 保存用户真实姓名和手机号
+          userInfo.value = {
+            realName: userData.realName || '',
+            phone: userData.phone || ''
+          };
+          
+          // 预填充用户真实姓名和手机号到编辑表单
+          editAddress.recipient = userData.realName || '';
+          editAddress.phone = userData.phone || '';
+          
+          // 如果有默认地址，则解析
+          if (userData.defaultAddress) {
+            // 直接用逗号分隔的形式保存地址
+            const addressParts = userData.defaultAddress.split(',');
+            if (addressParts.length >= 3) {
+              address.value = {
+                recipient: addressParts[0] || userData.realName || '',
+                phone: addressParts[1] || userData.phone || '',
+                fullAddress: addressParts[2] || ''
+              };
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('获取用户信息失败:', err);
+      // 失败时不阻止页面加载，允许用户手动添加地址
+    }
     
     // 设置费用
     shippingFee.value = 0; // 假设免运费
-    serviceFee.value = Math.round(orderPreview.value.price * orderPreview.value.quantity * 0.03); // 3%平台服务费
+    serviceFee.value = Math.round(orderPreview.value.price * quantity.value * 0.05 * 100) / 100; // 5%平台服务费
     
   } catch (err) {
     console.error('加载订单数据出错:', err);
@@ -296,68 +372,174 @@ const loadData = async () => {
   }
 };
 
-// 添加新地址
-const addNewAddress = () => {
+// 编辑地址
+const openEditAddress = () => {
+  // 将当前地址填入编辑表单
+  if (hasAddress.value) {
+    editAddress.recipient = address.value.recipient;
+    editAddress.phone = address.value.phone;
+    editAddress.fullAddress = address.value.fullAddress;
+  } else {
+    // 如果没有地址，使用用户信息预填充
+    editAddress.recipient = userInfo.value.realName || '';
+    editAddress.phone = userInfo.value.phone || '';
+    editAddress.fullAddress = '';
+  }
+  showEditAddressForm.value = true;
+};
+
+// 保存编辑的地址
+const saveAddress = () => {
   // 验证地址信息
-  if (!newAddress.recipient || !newAddress.phone || !newAddress.province || 
-      !newAddress.city || !newAddress.district || !newAddress.detailAddress) {
+  if (!editAddress.recipient || !editAddress.phone || !editAddress.fullAddress) {
     ElMessage.warning('请填写完整的地址信息');
     return;
   }
   
-  // 添加到地址列表
-  addresses.value.push({ ...newAddress });
+  // 更新地址
+  address.value = {
+    recipient: editAddress.recipient,
+    phone: editAddress.phone,
+    fullAddress: editAddress.fullAddress
+  };
   
-  // 选中新添加的地址
-  selectedAddressIndex.value = addresses.value.length - 1;
+  // 保存到用户默认地址
+  saveDefaultAddress(address.value);
   
-  // 清空表单并隐藏
-  Object.keys(newAddress).forEach(key => newAddress[key] = '');
-  showAddAddressForm.value = false;
+  // 隐藏表单
+  showEditAddressForm.value = false;
   
-  ElMessage.success('地址添加成功');
+  ElMessage.success('地址保存成功');
+};
+
+// 保存默认地址到用户信息
+const saveDefaultAddress = async (addr) => {
+  try {
+    // 生成地址字符串：收件人,手机号,详细地址
+    const addressStr = `${addr.recipient},${addr.phone},${addr.fullAddress}`;
+    
+    // 保存到用户资料
+    await userApi.updateUserProfile({
+      defaultAddress: addressStr
+    });
+  } catch (err) {
+    console.error('保存默认地址失败:', err);
+    // 不打断流程，只是记录日志
+  }
+};
+
+// 更新商品数量
+const updateQuantity = (newQuantity) => {
+  // 确保数量不小于1且不超过库存
+  if (newQuantity < 1) {
+    quantity.value = 1;
+  } else if (newQuantity > maxQuantity.value) {
+    quantity.value = maxQuantity.value;
+    ElMessage.warning(`商品库存仅剩${maxQuantity.value}件`);
+  } else {
+    quantity.value = newQuantity;
+  }
+  
+  // 更新服务费
+  serviceFee.value = Math.round(orderPreview.value.price * quantity.value * 0.05 * 100) / 100;
 };
 
 // 提交订单
 const submitOrder = async () => {
   if (!canSubmit.value) {
-    ElMessage.warning(isOfflineTrade.value ? '请填写完整的线下交易信息' : '请选择收货地址');
+    if (!orderPreview.value.stock || orderPreview.value.stock < quantity.value) {
+      ElMessage.error('商品库存不足');
+    } else {
+      ElMessage.warning(isOfflineTrade.value ? '请填写完整的线下交易信息' : '请填写完整的收货地址');
+    }
     return;
   }
   
   submitting.value = true;
   try {
-    // 构建订单数据
-    const orderData = {
-      productId: orderPreview.value.productId,
-      quantity: orderPreview.value.quantity,
-      tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS',
-      remark: orderRemark.value
-    };
+    // 判断是从购物车创建还是直接创建
+    const isFromCart = localStorage.getItem('orderFromCart') === 'true';
+    let orderNo;
     
-    // 添加收货地址或线下交易信息
-    if (isOfflineTrade.value) {
-      orderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
-      orderData.offlineMeetingTime = offlineTradeInfo.meetingTime;
-    } else {
-      orderData.recipientAddress = addresses.value[selectedAddressIndex.value];
-    }
-    
-    // 调用API创建订单
-    const response = await orderApi.createOrder(orderData);
-    
-    if (response.data && response.data.code === 200) {
-      // 获取订单号
-      const orderNo = response.data.data.orderNo || response.data.data;
+    if (isFromCart) {
+      // 从购物车创建订单
+      const cartOrderData = {
+        tradeType: isOfflineTrade.value ? '线下交易' : '快递配送',
+        pointsUsed: 0, // 暂不支持积分抵扣，设为0
+      };
       
-      // 清除本地存储的订单预览
-      localStorage.removeItem('orderPreview');
+      // 添加线下交易信息
+      if (isOfflineTrade.value) {
+        cartOrderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
+        // 转换日期时间格式为后端要求的格式
+        cartOrderData.offlineMeetingTime = offlineTradeInfo.meetingTime.replace('T', ' ') + ':00';
+      }
       
-      // 跳转到支付页面或订单详情页
-      ElMessage.success('订单创建成功');
-      router.push(`/order/${orderNo}?action=pay`);
+      // 调用API从购物车创建订单
+      const response = await orderApi.createOrderFromCart(cartOrderData);
+      
+      if (response.data && response.data.code === 200) {
+        // 获取订单号列表
+        const orderNos = response.data.data;
+        
+        // 清除本地存储
+        localStorage.removeItem('orderFromCart');
+        
+        // 如果只有一个订单，直接跳转到订单详情
+        if (orderNos.length === 1) {
+          orderNo = orderNos[0];
+          ElMessage.success('订单创建成功');
+          router.push(`/order/${orderNo}?action=pay`);
+        } else {
+          // 如果有多个订单，跳转到订单列表
+          ElMessage.success(`成功创建 ${orderNos.length} 个订单`);
+          router.push('/orders/user');
+        }
+      } else {
+        ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
+      }
     } else {
-      ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
+      // 直接创建订单
+      // 构建订单数据
+      const orderData = {
+        merchantId: orderPreview.value.sellerId, // 商家ID
+        items: [{
+          productId: orderPreview.value.productId,
+          quantity: quantity.value // 使用用户选择的数量
+        }],
+        tradeType: isOfflineTrade.value ? '线下交易' : '快递配送'
+      };
+      
+      // 添加收货地址或线下交易信息
+      if (isOfflineTrade.value) {
+        orderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
+        // 转换日期时间格式为后端要求的格式
+        orderData.offlineMeetingTime = offlineTradeInfo.meetingTime.replace('T', ' ') + ':00';
+      } else {
+        orderData.address = {
+          receiverName: address.value.recipient,
+          receiverPhone: address.value.phone,
+          fullAddress: address.value.fullAddress,
+          isDefault: true // 只有一个地址，所以默认为true
+        };
+      }
+      
+      // 调用API创建订单
+      const response = await orderApi.createOrder(orderData);
+      
+      if (response.data && response.data.code === 200) {
+        // 获取订单号
+        orderNo = response.data.data;
+        
+        // 清除本地存储的订单预览
+        localStorage.removeItem('orderPreview');
+        
+        // 跳转到支付页面或订单详情页
+        ElMessage.success('订单创建成功');
+        router.push(`/order/${orderNo}?action=pay`);
+      } else {
+        ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
+      }
     }
   } catch (err) {
     console.error('提交订单出错:', err);
@@ -380,60 +562,524 @@ onMounted(() => {
 
 <style scoped>
 .order-confirm-container {
-  min-height: 90vh;
-  background-color: #f8f9fa;
+  min-height: 80vh;
+  background-color: #f5f5f5;
+  padding: 20px 0;
 }
 
-.order-confirm-content {
-  max-width: 800px;
+.container {
+  max-width: 1000px;
   margin: 0 auto;
 }
 
-.card {
-  border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+.order-title {
+  margin-bottom: 20px;
 }
 
-.card-header {
-  background-color: white;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
+.order-title h4 {
+  font-size: 20px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+/* 加载和错误状态 */
+.loading-wrapper, .error-wrapper {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 40px 20px;
+  text-align: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.loading-text {
+  margin-top: 15px;
+  color: #666;
+}
+
+.error-message {
+  color: #cf1322;
+  background-color: #fff2f0;
+  padding: 16px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+}
+
+.back-button-wrapper {
+  margin-top: 20px;
+}
+
+.btn-back {
+  background-color: #fff;
+  color: #4a6ee0;
+  border: 1px solid #4a6ee0;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-back:hover {
+  background-color: #f0f5ff;
+}
+
+/* 订单内容样式 */
+.order-section {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 16px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.section-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+  margin: 0;
+}
+
+/* 交易方式切换 */
+.trade-type-switch {
+  display: flex;
+  align-items: center;
+}
+
+.switch-input {
+  margin-right: 8px;
+}
+
+.switch-label {
+  font-size: 14px;
+  color: #666;
+  cursor: pointer;
+}
+
+/* 地址卡片 */
+.address-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background-color: #fafafa;
+  transition: all 0.3s;
+}
+
+.address-card:hover {
+  border-color: #4a6ee0;
+  background-color: #f0f5ff;
+}
+
+.recipient-info {
+  margin-bottom: 8px;
+}
+
+.recipient-name {
+  font-weight: 600;
+  font-size: 15px;
+  margin-right: 10px;
+}
+
+.recipient-phone {
+  color: #666;
+}
+
+.default-tag {
+  display: inline-block;
+  background-color: #e74c3c;
+  color: #fff;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  margin-left: 10px;
+}
+
+.address-detail {
+  color: #666;
+  font-size: 14px;
+}
+
+.btn-edit-address {
+  background-color: transparent;
+  color: #4a6ee0;
+  border: none;
+  cursor: pointer;
+  padding: 5px 10px;
+  font-size: 14px;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.btn-edit-address:hover {
+  background-color: #f0f5ff;
+}
+
+/* 无地址状态 */
+.no-address-card {
+  padding: 20px;
+  border: 1px dashed #d9d9d9;
+  border-radius: 8px;
+  text-align: center;
+  background-color: #fafafa;
+}
+
+.no-address-tip {
+  color: #666;
+  margin-bottom: 15px;
+}
+
+.no-address-tip i {
+  font-size: 18px;
+  margin-right: 8px;
+  color: #e74c3c;
+}
+
+.btn-add-address {
+  background-color: #4a6ee0;
+  color: #fff;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-add-address:hover {
+  background-color: #3d5bbf;
+}
+
+/* 地址表单 */
+.address-form {
+  margin-top: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #f5f5f5;
+  border-bottom: 1px solid #e8e8e8;
+}
+
+.form-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.btn-close-form {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  color: #666;
+}
+
+.form-content {
+  padding: 16px;
+  background-color: #fff;
+}
+
+.form-row {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.form-group {
+  flex: 1;
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 14px;
+  color: #666;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+  transition: all 0.3s;
+}
+
+.form-group input:focus {
+  border-color: #4a6ee0;
+  box-shadow: 0 0 0 2px rgba(74, 110, 224, 0.2);
+  outline: none;
+}
+
+.form-tip {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: #999;
+}
+
+.form-action {
+  text-align: right;
+}
+
+.btn-save-address {
+  background-color: #4a6ee0;
+  color: #fff;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.btn-save-address:hover {
+  background-color: #3d5bbf;
+}
+
+/* 线下交易表单 */
+.offline-trade-form {
+  padding: 16px;
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  background-color: #fafafa;
+}
+
+/* 商品卡片 */
+.product-card {
+  display: flex;
+  align-items: center;
+  padding: 16px 0;
+  border-bottom: 1px solid #f0f0f0;
 }
 
 .product-image {
+  margin-right: 16px;
+}
+
+.product-image img {
   width: 80px;
   height: 80px;
   object-fit: cover;
   border-radius: 4px;
+  border: 1px solid #eee;
+}
+
+.product-info {
+  flex: 1;
 }
 
 .product-name {
-  font-size: 1.1rem;
-  margin-bottom: 0.5rem;
+  font-size: 16px;
+  margin: 0 0 8px 0;
+  color: #333;
 }
 
-.price {
-  font-size: 1.2rem;
+.product-seller {
+  color: #999;
+  font-size: 13px;
 }
 
-.address-item {
-  padding: 10px;
-  border-radius: 5px;
-  transition: background-color 0.2s;
+.product-seller i {
+  margin-right: 5px;
 }
 
-.address-item:hover {
-  background-color: #f8f9fa;
+.product-stock {
+  color: #999;
+  font-size: 13px;
 }
 
-.form-check-input:checked ~ .form-check-label .address-content {
+.product-stock i {
+  margin-right: 5px;
+}
+
+.product-price-wrapper {
+  text-align: right;
+}
+
+.product-price {
+  font-size: 16px;
+  color: #e74c3c;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.quantity-selector {
+  display: flex;
+  align-items: center;
+}
+
+.quantity-btn {
+  background-color: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+.quantity-input {
+  width: 40px;
+  padding: 5px;
+  text-align: center;
+  border: 1px solid #d9d9d9;
+  border-radius: 4px;
+}
+
+/* 支付信息 */
+.payment-card {
+  padding: 16px;
+  background-color: #fafafa;
+  border-radius: 8px;
+}
+
+.payment-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  font-size: 14px;
+  color: #666;
+}
+
+.payment-total {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #e8e8e8;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.total-value {
+  color: #e74c3c;
+  font-size: 20px;
+}
+
+/* 提交订单区 */
+.order-submit-section {
+  background-color: #fff;
+  border-radius: 8px;
+  padding: 16px 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.order-summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-count {
+  color: #666;
+  font-size: 14px;
+  margin-bottom: 5px;
+}
+
+.order-amount {
+  font-size: 14px;
+}
+
+.order-amount strong {
+  color: #e74c3c;
+  font-size: 20px;
+  font-weight: 600;
+}
+
+.btn-submit {
+  background-color: #e74c3c;
+  color: #fff;
+  border: none;
+  padding: 12px 30px;
+  border-radius: 4px;
+  font-size: 16px;
   font-weight: 500;
+  cursor: pointer;
+  transition: all 0.3s;
 }
 
-.total-price {
-  font-size: 1.1rem;
+.btn-submit:hover:not(:disabled) {
+  background-color: #d63725;
 }
 
-button.btn-danger {
-  min-width: 150px;
+.btn-submit:disabled {
+  background-color: #f5f5f5;
+  color: #bfbfbf;
+  cursor: not-allowed;
+}
+
+/* 加载动画 */
+.spinner {
+  border: 4px solid rgba(0, 0, 0, 0.1);
+  border-radius: 50%;
+  border-top: 4px solid #4a6ee0;
+  width: 30px;
+  height: 30px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+.spinner-border-sm {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  vertical-align: text-bottom;
+  margin-right: 8px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    flex-direction: column;
+    gap: 0;
+  }
+  
+  .order-submit-section {
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .order-summary {
+    text-align: center;
+  }
+  
+  .btn-submit {
+    width: 100%;
+  }
+}
+
+.in-stock {
+  color: #52c41a;
+}
+
+.low-stock {
+  color: #faad14;
+}
+
+.out-of-stock {
+  color: #f5222d;
 }
 </style> 

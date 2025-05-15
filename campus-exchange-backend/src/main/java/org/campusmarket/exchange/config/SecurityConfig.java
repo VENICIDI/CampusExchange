@@ -4,9 +4,11 @@ package org.campusmarket.exchange.config;
 // --- 新增或确保存在的导入 ---
 import jakarta.annotation.Resource; // 如果使用 @Resource
 // import org.springframework.beans.factory.annotation.Autowired; // 或者使用 @Autowired
+import org.campusmarket.exchange.filter.JwtAuthenticationFilter;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.core.userdetails.UserDetailsService; // 需要注入 UserServiceImpl
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 // --- 导入结束 ---
 
 import org.springframework.context.annotation.Bean;
@@ -40,6 +42,9 @@ public class SecurityConfig {
     // Spring 会自动找到你标记了 @Service 且实现了 UserDetailsService 的 UserServiceImpl
     @Resource // 或者 @Autowired
     private UserDetailsService userDetailsService;
+    
+    @Resource
+    private JwtAuthenticationFilter jwtAuthenticationFilter;
     // --- 注入结束 ---
 
     // PasswordEncoder Bean 保持不变
@@ -88,6 +93,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/current").permitAll()
                         // 允许访问用户个人资料API
                         .requestMatchers("/api/users/profile", "/api/users/profile/**").permitAll()
+                        // 购物车和订单相关API需要认证
+                        .requestMatchers("/api/cart/**", "/api/orders/**").authenticated()
                         // 其他请求需要认证 (确保这行在最后)
                         .anyRequest().authenticated()
                 )
@@ -96,7 +103,9 @@ public class SecurityConfig {
                 // 启用CORS (使用下面的 corsConfigurationSource Bean)
                 .cors(Customizer.withDefaults())
                 // 配置会话管理为无状态
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                // 添加JWT过滤器
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
         // 注意：通常不需要显式地将 provider 添加到 HttpSecurity 或 AuthenticationManagerBuilder
         // Spring Boot 会自动检测并使用 ApplicationContext 中的 AuthenticationProvider Bean。

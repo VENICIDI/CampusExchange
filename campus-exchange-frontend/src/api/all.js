@@ -19,4 +19,13 @@ export {
   messageApi,   // 消息通知相关
   merchantApi,  // 商家相关
   fileApi       // 文件上传相关
-}; 
+};
+
+export * from './product';
+export * from './merchant';
+export * from './user';
+export * from './order';
+export * from './auth';
+export * from './file';
+export * from './message';
+export * from './cart'; 

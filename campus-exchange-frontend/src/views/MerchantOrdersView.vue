@@ -145,27 +145,13 @@
     <!-- 发货弹窗 -->
     <el-dialog
       v-model="shipDialogVisible"
-      title="填写发货信息"
+      title="确认发货"
       width="500px"
     >
-      <el-form ref="shipFormRef" :model="shipForm" :rules="shipRules" label-width="100px">
-        <el-form-item label="快递公司" prop="expressCompany">
-          <el-select v-model="shipForm.expressCompany" placeholder="请选择快递公司" style="width: 100%">
-            <el-option label="顺丰速运" value="顺丰速运" />
-            <el-option label="中通快递" value="中通快递" />
-            <el-option label="圆通速递" value="圆通速递" />
-            <el-option label="韵达快递" value="韵达快递" />
-            <el-option label="申通快递" value="申通快递" />
-            <el-option label="百世快递" value="百世快递" />
-            <el-option label="京东物流" value="京东物流" />
-            <el-option label="邮政EMS" value="邮政EMS" />
-            <el-option label="其他快递" value="其他快递" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="快递单号" prop="trackingNo">
-          <el-input v-model="shipForm.trackingNo" placeholder="请输入快递单号"></el-input>
-        </el-form-item>
-      </el-form>
+      <div class="text-center">
+        <p class="mb-3">是否确认发货该订单？</p>
+        <p class="text-muted">订单号：{{shipForm.orderNo}}</p>
+      </div>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="shipDialogVisible = false">取消</el-button>
@@ -223,9 +209,7 @@ const currentStatus = ref(null);
 // 发货弹窗
 const shipDialogVisible = ref(false);
 const shipForm = reactive({
-  orderNo: '',
-  expressCompany: '',
-  trackingNo: ''
+  orderNo: ''
 });
 
 // 退货处理弹窗
@@ -237,17 +221,6 @@ const returnForm = reactive({
 });
 
 const submitting = ref(false);
-
-// 表单验证规则
-const shipRules = {
-  expressCompany: [
-    { required: true, message: '请选择快递公司', trigger: 'change' }
-  ],
-  trackingNo: [
-    { required: true, message: '请输入快递单号', trigger: 'blur' },
-    { min: 5, message: '快递单号长度不能小于5个字符', trigger: 'blur' }
-  ]
-};
 
 // 订单状态选项
 const statusOptions = {
@@ -369,25 +342,17 @@ const goToPage = (page) => {
 // 打开发货弹窗
 const openShipDialog = (orderNo) => {
   shipForm.orderNo = orderNo;
-  shipForm.expressCompany = '';
-  shipForm.trackingNo = '';
   shipDialogVisible.value = true;
 };
 
 // 确认发货
 const confirmShip = async () => {
-  // 表单验证
-  if (!shipForm.expressCompany || !shipForm.trackingNo) {
-    ElMessage.warning('请填写完整的发货信息');
-    return;
-  }
-  
   submitting.value = true;
   try {
     const response = await orderApi.shipOrder(
       shipForm.orderNo,
-      shipForm.trackingNo,
-      shipForm.expressCompany
+      '', // 不再传递快递单号
+      ''  // 不再传递快递公司
     );
     
     if (response.data && response.data.code === 200) {

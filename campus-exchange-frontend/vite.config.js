@@ -30,7 +30,6 @@ export default defineConfig({
         target: 'http://localhost:8080',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path.replace(/^\/api/, '/api'),
         configure: (proxy, _options) => {
           proxy.on('error', (err, _req, _res) => {
             console.log('API代理错误', err);

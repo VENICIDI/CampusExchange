@@ -12,6 +12,8 @@ import OrderDetailView from '../views/OrderDetailView.vue'
 import UserOrdersView from '../views/UserOrdersView.vue'
 import MerchantOrdersView from '../views/MerchantOrdersView.vue'
 
+import CartView from '../views/CartView.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -84,18 +86,29 @@ const router = createRouter({
       component: MerchantStorefrontView,
       meta: { requiresAuth: false }  // 店铺主页允许未登录访问
     },
-    // 订单相关路由
+    {
+      path: '/merchant/products/publish',
+      name: 'MerchantProductPublish',
+      component: ProductPublishView,
+      meta: { requiresAuth: true, role: 1 } // 商家角色
+    },
+    {
+      path: '/cart',
+      name: 'Cart',
+      component: CartView,
+      meta: { requiresAuth: true } // 需要登录
+    },
     {
       path: '/order/confirm',
-      name: 'order-confirm',
+      name: 'OrderConfirm',
       component: OrderConfirmView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true } // 需要登录
     },
     {
       path: '/order/:orderNo',
-      name: 'order-detail',
+      name: 'OrderDetail',
       component: OrderDetailView,
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true } // 需要登录
     },
     {
       path: '/orders/user',

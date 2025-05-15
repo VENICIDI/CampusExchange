@@ -4,6 +4,8 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import lombok.Data;
 import org.campusmarket.exchange.dto.OrderCreateDTO;
 import org.campusmarket.exchange.dto.OrderDetailVO;
 import org.campusmarket.exchange.dto.OrderVO;
@@ -12,6 +14,7 @@ import org.campusmarket.exchange.dto.UserDTO;
 import org.campusmarket.exchange.entity.Merchant;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
 import org.campusmarket.exchange.enums.RoleEnum;
+import org.campusmarket.exchange.enums.TradeTypeEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.service.IMerchantService;
 import org.campusmarket.exchange.service.IOrderService;
@@ -20,11 +23,13 @@ import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
+
 /**
  * 订单控制器
  */
 @RestController
-@RequestMapping("/orders")
+@RequestMapping("/api/orders")
 @Validated
 public class OrderController {
     
@@ -47,6 +52,28 @@ public class OrderController {
         }
         String orderNo = orderService.createOrder(userId, orderDTO);
         return Result.success(orderNo);
+    }
+    
+    /**
+     * 从购物车创建订单
+     * @param cartOrderDTO 从购物车创建订单DTO
+     * @return 订单编号列表
+     */
+    @PostMapping("/from-cart")
+    public Result<List<String>> createOrderFromCart(@Valid @RequestBody CartOrderDTO cartOrderDTO) {
+        Long userId = UserContext.getCurrentUserId();
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
+        }
+        List<String> orderNos = orderService.createOrderFromCart(
+                userId, 
+                cartOrderDTO.getPointsUsed(), 
+                cartOrderDTO.getTradeType(),
+                cartOrderDTO.getOfflineMeetingLocation(),
+                cartOrderDTO.getOfflineMeetingTime(),
+                cartOrderDTO.getAddress()
+        );
+        return Result.success(orderNos);
     }
     
     /**
@@ -87,7 +114,7 @@ public class OrderController {
      * @param pageSize 每页数量
      * @return 订单列表
      */
-    @GetMapping("/merchant")
+    @GetMapping("/merchant-orders")
     public Result<Page<OrderVO>> getMerchantOrders(
             @RequestParam(required = false) OrderStatusEnum status,
             @RequestParam(defaultValue = "1") Integer pageNum,
@@ -162,15 +189,10 @@ public class OrderController {
     /**
      * 商家发货
      * @param orderNo 订单编号
-     * @param trackingNo 物流单号
-     * @param expressCompany 快递公司
      * @return 是否成功
      */
     @PostMapping("/{orderNo}/ship")
-    public Result<Boolean> shipOrder(
-            @PathVariable String orderNo,
-            @RequestParam @NotBlank(message = "物流单号不能为空") String trackingNo,
-            @RequestParam @NotBlank(message = "快递公司不能为空") String expressCompany) {
+    public Result<Boolean> shipOrder(@PathVariable String orderNo) {
         UserDTO currentUser = UserContext.getCurrentUser();
         if (currentUser == null) {
             throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
@@ -189,7 +211,8 @@ public class OrderController {
         }
         
         Long merchantId = merchant.getId();
-        boolean shipped = orderService.shipOrder(merchantId, orderNo, trackingNo, expressCompany);
+        // 传递空字符串作为不再使用的参数
+        boolean shipped = orderService.shipOrder(merchantId, orderNo, "", "");
         return Result.success(shipped);
     }
     
@@ -243,5 +266,44 @@ public class OrderController {
         Long merchantId = merchant.getId();
         boolean processed = orderService.processReturnRequest(merchantId, orderNo, approve, remark);
         return Result.success(processed);
+    }
+    
+    /**
+     * 从购物车创建订单DTO
+     */
+    @Data
+    public static class CartOrderDTO {
+        
+        @NotNull(message = "交易方式不能为空")
+        private TradeTypeEnum tradeType;
+        
+        private Integer pointsUsed;
+        
+        // 线下交易地点 (线下交易时必填)
+        private String offlineMeetingLocation;
+        
+        // 线下交易时间 (线下交易时必填, 格式: yyyy-MM-dd HH:mm:ss)
+        private String offlineMeetingTime;
+        
+        // 收货地址信息
+        private OrderAddressDTO address;
+        
+        /**
+         * 收货地址DTO
+         */
+        @Data
+        public static class OrderAddressDTO {
+            // 收货人姓名
+            private String receiverName;
+            
+            // 收货人手机号
+            private String receiverPhone;
+            
+            // 完整地址
+            private String fullAddress;
+            
+            // 是否为默认地址
+            private Boolean isDefault;
+        }
     }
 } 

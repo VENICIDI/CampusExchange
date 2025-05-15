@@ -117,6 +117,9 @@ onUnmounted(() => {
         <router-link :to="isLoggedIn && user.role === 'MERCHANT' ? '/merchant' : '/'" class="nav-link">首页</router-link>
         <router-link v-if="isLoggedIn" :to="user.role === 'MERCHANT' ? '/orders/merchant' : '/orders/user'" class="nav-link">我的订单</router-link>
         <router-link v-if="isLoggedIn && user.role === 'MERCHANT'" to="/product/publish" class="nav-link">发布商品</router-link>
+        <router-link v-if="isLoggedIn" to="/cart" class="nav-link">
+          <i class="fas fa-shopping-cart"></i> 购物车
+        </router-link>
         <router-link to="/about" class="nav-link">关于</router-link>
       </nav>
       

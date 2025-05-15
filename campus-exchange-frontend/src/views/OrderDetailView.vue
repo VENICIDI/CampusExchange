@@ -7,7 +7,7 @@
         </button>
         <h2 class="mb-0">订单详情</h2>
       </div>
-      
+
       <!-- 加载中状态 -->
       <div v-if="loading" class="text-center py-5">
         <div class="spinner-border text-primary" role="status">
@@ -15,12 +15,12 @@
         </div>
         <p class="mt-2">正在加载订单信息...</p>
       </div>
-      
+
       <!-- 错误状态 -->
       <div v-else-if="error" class="alert alert-danger">
         {{ error }}
       </div>
-      
+
       <!-- 订单详情内容 -->
       <div v-else-if="order" class="order-detail-content">
         <!-- 订单状态卡片 -->
@@ -38,11 +38,11 @@
                 </span>
               </div>
             </div>
-            
+
             <div class="order-timeline mt-4">
               <div class="timeline-steps">
-                <div 
-                  v-for="(step, index) in orderTimeline" 
+                <div
+                  v-for="(step, index) in orderTimeline"
                   :key="index"
                   :class="['timeline-step', step.active ? 'active' : '', step.completed ? 'completed' : '']"
                 >
@@ -58,7 +58,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 商品信息卡片 -->
         <div class="card mb-4">
           <div class="card-header">
@@ -79,9 +79,9 @@
                   <tr v-for="(item, index) in order.orderItems" :key="index">
                     <td>
                       <div class="d-flex align-items-center">
-                        <img 
-                          :src="item.productImage || 'https://via.placeholder.com/60'" 
-                          :alt="item.productName" 
+                        <img
+                          :src="item.productImage || 'https://via.placeholder.com/60/e0e0e0/666666?text=商品'"
+                          :alt="item.productName"
                           class="product-image me-3"
                         >
                         <div>
@@ -101,7 +101,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 收货信息 -->
         <div class="card mb-4" v-if="order.tradeType === 'EXPRESS'">
           <div class="card-header">
@@ -115,14 +115,12 @@
                 <p class="mb-3"><strong>收货地址:</strong> {{ formatAddress(order.orderAddress) }}</p>
               </div>
               <div class="col-md-6" v-if="order.status === 'SHIPPED' || order.status === 'RECEIVED' || order.status === 'COMPLETED'">
-                <p class="mb-1"><strong>快递公司:</strong> {{ order.expressCompany || '未知' }}</p>
-                <p class="mb-1"><strong>快递单号:</strong> {{ order.trackingNo || '未知' }}</p>
-                <p class="mb-1"><strong>发货时间:</strong> {{ formatDate(order.shipTime) || '未知' }}</p>
+                <p class="mb-1"><strong>发货时间:</strong> {{ formatDate(order.shippingTime) || '未知' }}</p>
               </div>
             </div>
           </div>
         </div>
-        
+
         <!-- 线下交易信息 -->
         <div class="card mb-4" v-if="order.tradeType === 'OFFLINE'">
           <div class="card-header">
@@ -133,7 +131,7 @@
             <p class="mb-1"><strong>交易时间:</strong> {{ formatDate(order.offlineMeetingTime) || '未指定' }}</p>
           </div>
         </div>
-        
+
         <!-- 订单金额信息 -->
         <div class="card mb-4">
           <div class="card-header">
@@ -159,41 +157,41 @@
             </div>
           </div>
         </div>
-        
+
         <!-- 订单操作区 -->
         <div class="order-actions card mb-4">
           <div class="card-body">
             <div class="d-flex justify-content-end">
               <!-- 待付款状态 -->
-              <button 
-                v-if="order.status === 'PENDING_PAYMENT'" 
-                @click="payOrder" 
+              <button
+                v-if="order.status === 'PENDING_PAYMENT'"
+                @click="payOrder"
                 class="btn btn-primary me-2"
               >
                 去支付
               </button>
-              
-              <button 
-                v-if="order.status === 'PENDING_PAYMENT'" 
-                @click="cancelOrder" 
+
+              <button
+                v-if="order.status === 'PENDING_PAYMENT'"
+                @click="cancelOrder"
                 class="btn btn-outline-danger"
               >
                 取消订单
               </button>
-              
+
               <!-- 已发货状态 -->
-              <button 
-                v-if="order.status === 'SHIPPED'" 
-                @click="confirmReceipt" 
+              <button
+                v-if="order.status === 'SHIPPED'"
+                @click="confirmReceipt"
                 class="btn btn-primary"
               >
                 确认收货
               </button>
-              
+
               <!-- 已收货状态 -->
-              <button 
-                v-if="order.status === 'RECEIVED'" 
-                @click="requestReturn" 
+              <button
+                v-if="order.status === 'RECEIVED'"
+                @click="requestReturn"
                 class="btn btn-outline-primary"
               >
                 申请退货/退款
@@ -203,7 +201,7 @@
         </div>
       </div>
     </div>
-    
+
     <!-- 退货申请弹窗 -->
     <el-dialog
       v-model="returnDialogVisible"
@@ -212,9 +210,9 @@
     >
       <el-form ref="returnFormRef" :model="returnForm" label-width="100px">
         <el-form-item label="退货原因" prop="reason">
-          <el-input 
-            v-model="returnForm.reason" 
-            type="textarea" 
+          <el-input
+            v-model="returnForm.reason"
+            type="textarea"
             :rows="4"
             placeholder="请详细描述退货原因"
           ></el-input>
@@ -254,18 +252,18 @@ const returnForm = reactive({
 const fetchOrderDetail = async () => {
   loading.value = true;
   error.value = null;
-  
+
   try {
     const orderNo = route.params.orderNo;
     if (!orderNo) {
       error.value = '订单号不存在';
       return;
     }
-    
+
     const response = await orderApi.getOrderDetail(orderNo);
     if (response.data && response.data.code === 200) {
       order.value = response.data.data;
-      
+
       // 如果有action=pay参数并且订单状态是待付款，自动弹出支付确认
       if (route.query.action === 'pay' && order.value.status === 'PENDING_PAYMENT') {
         payOrder();
@@ -309,14 +307,14 @@ const getStatusBadgeClass = (status) => {
     'RETURNED': 'bg-success',
     'RETURN_REJECTED': 'bg-danger'
   };
-  
+
   return statusClassMap[status] || 'bg-secondary';
 };
 
 // 订单时间线
 const orderTimeline = computed(() => {
   if (!order.value) return [];
-  
+
   const timeline = [
     {
       title: '下单',
@@ -354,7 +352,7 @@ const orderTimeline = computed(() => {
       active: order.value.status === 'RECEIVED'
     }
   ];
-  
+
   // 如果是取消状态，替换时间线
   if (order.value.status === 'CANCELLED') {
     return [
@@ -374,7 +372,7 @@ const orderTimeline = computed(() => {
       }
     ];
   }
-  
+
   // 如果是退货状态，添加退货节点
   if (['RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_GOODS_RECEIVED', 'RETURNED', 'RETURN_REJECTED'].includes(order.value.status)) {
     const returnTimeline = [
@@ -407,7 +405,7 @@ const orderTimeline = computed(() => {
         active: false
       }
     ];
-    
+
     if (order.value.status === 'RETURN_REQUESTED') {
       returnTimeline.push({
         title: '申请退货',
@@ -477,10 +475,10 @@ const orderTimeline = computed(() => {
         active: true
       });
     }
-    
+
     return returnTimeline;
   }
-  
+
   return timeline;
 });
 
@@ -492,10 +490,10 @@ const payOrder = async () => {
       cancelButtonText: '取消',
       type: 'info'
     });
-    
+
     submitting.value = true;
     const response = await orderApi.payOrder(order.value.orderNo);
-    
+
     if (response.data && response.data.code === 200) {
       ElMessage.success('订单支付成功');
       // 刷新订单信息
@@ -521,10 +519,10 @@ const cancelOrder = async () => {
       cancelButtonText: '不取消',
       type: 'warning'
     });
-    
+
     submitting.value = true;
     const response = await orderApi.cancelOrder(order.value.orderNo);
-    
+
     if (response.data && response.data.code === 200) {
       ElMessage.success('订单已取消');
       // 刷新订单信息
@@ -550,10 +548,10 @@ const confirmReceipt = async () => {
       cancelButtonText: '取消',
       type: 'info'
     });
-    
+
     submitting.value = true;
     const response = await orderApi.confirmReceipt(order.value.orderNo);
-    
+
     if (response.data && response.data.code === 200) {
       ElMessage.success('已确认收货');
       // 刷新订单信息
@@ -584,11 +582,11 @@ const submitReturnRequest = async () => {
     ElMessage.warning('请填写退货原因');
     return;
   }
-  
+
   submitting.value = true;
   try {
     const response = await orderApi.requestReturn(returnForm.orderNo, returnForm.reason);
-    
+
     if (response.data && response.data.code === 200) {
       ElMessage.success('退货申请已提交');
       returnDialogVisible.value = false;
@@ -624,21 +622,37 @@ onMounted(() => {
 
 .card {
   border: none;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.06);
   margin-bottom: 1.5rem;
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.card:hover {
+  box-shadow: 0 5px 20px rgba(0,0,0,0.1);
 }
 
 .card-header {
   background-color: white;
   border-bottom: 1px solid rgba(0,0,0,0.1);
-  padding: 1rem 1.5rem;
+  padding: 1.2rem 1.5rem;
+  font-weight: 600;
 }
 
 .product-image {
   width: 60px;
   height: 60px;
   object-fit: cover;
-  border-radius: 4px;
+  border-radius: 8px;
+  border: 1px solid #eee;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  transition: all 0.3s ease;
+}
+
+.product-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 3px 10px rgba(0,0,0,0.12);
 }
 
 .timeline-steps {
@@ -660,14 +674,14 @@ onMounted(() => {
   position: absolute;
   top: 20px;
   width: 100%;
-  height: 2px;
+  height: 3px;
   background-color: #e0e0e0;
   left: 50%;
   z-index: 0;
 }
 
 .timeline-step.completed:not(:last-child)::after {
-  background-color: #28a745;
+  background-color: #4CAF50;
 }
 
 .timeline-icon {
@@ -681,28 +695,33 @@ onMounted(() => {
   justify-content: center;
   position: relative;
   z-index: 1;
+  transition: all 0.3s ease;
 }
 
 .timeline-step.completed .timeline-icon {
-  background-color: #d4edda;
-  border-color: #28a745;
-  color: #28a745;
+  background-color: #E8F5E9;
+  border-color: #4CAF50;
+  color: #4CAF50;
+  transform: scale(1.1);
 }
 
 .timeline-step.active .timeline-icon {
-  background-color: #cce5ff;
-  border-color: #007bff;
-  color: #007bff;
+  background-color: #E3F2FD;
+  border-color: #2196F3;
+  color: #2196F3;
+  transform: scale(1.2);
+  box-shadow: 0 0 10px rgba(33, 150, 243, 0.4);
 }
 
 .timeline-content {
   text-align: center;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 
 .step-title {
-  font-weight: 500;
+  font-weight: 600;
   font-size: 0.9rem;
+  color: #333;
 }
 
 .step-time {
@@ -711,26 +730,75 @@ onMounted(() => {
   margin-top: 4px;
 }
 
+.btn {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
+  padding: 8px 16px;
+}
+
+.btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+}
+
+.btn-primary {
+  background-color: #4a6ee0;
+  border-color: #4a6ee0;
+}
+
+.btn-outline-primary {
+  color: #4a6ee0;
+  border-color: #4a6ee0;
+}
+
+.btn-outline-danger {
+  color: #dc3545;
+  border-color: #dc3545;
+}
+
+.btn-primary:hover, .btn-outline-primary:hover {
+  background-color: #3d5eca;
+  border-color: #3d5eca;
+}
+
+.badge {
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.order-status-header {
+  background-color: #f8faff;
+  padding: 15px;
+  border-radius: 10px;
+  margin-bottom: 15px;
+}
+
+.order-total {
+  font-size: 1.1rem;
+}
+
 @media (max-width: 768px) {
   .timeline-steps {
     flex-direction: column;
     align-items: flex-start;
   }
-  
+
   .timeline-step {
     flex-direction: row;
     margin-bottom: 1rem;
     width: 100%;
   }
-  
+
   .timeline-step:not(:last-child)::after {
     display: none;
   }
-  
+
   .timeline-content {
     text-align: left;
     margin-left: 1rem;
     margin-top: 0;
   }
 }
-</style> 
+</style>

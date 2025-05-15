@@ -5,11 +5,14 @@ export const orderApi = {
   // 创建订单
   createOrder: (orderData) => api.post('/orders', orderData),
   
+  // 从购物车创建订单
+  createOrderFromCart: (orderData) => api.post('/orders/from-cart', orderData),
+  
   // 获取用户订单列表
   getUserOrders: (params) => api.get('/orders/user', { params }),
   
   // 获取商家订单列表
-  getMerchantOrders: (params) => api.get('/orders/merchant', { params }),
+  getMerchantOrders: (params) => api.get('/orders/merchant-orders', { params }),
   
   // 获取订单详情
   getOrderDetail: (orderNo) => api.get(`/orders/${orderNo}`),
@@ -24,11 +27,7 @@ export const orderApi = {
   payOrder: (orderNo) => api.post(`/orders/${orderNo}/pay`),
   
   // 商家发货
-  shipOrder: (orderNo, trackingNo, expressCompany) => api.post(
-    `/orders/${orderNo}/ship`, 
-    null, 
-    { params: { trackingNo, expressCompany } }
-  ),
+  shipOrder: (orderNo) => api.post(`/orders/${orderNo}/ship`),
   
   // 申请退货/退款
   requestReturn: (orderNo, reason) => api.post(

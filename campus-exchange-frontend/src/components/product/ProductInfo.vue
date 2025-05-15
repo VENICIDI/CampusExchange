@@ -6,6 +6,7 @@
       <span class="current-price">¥{{ product.currentPrice }}</span>
       <span v-if="product.originalPrice && product.originalPrice > product.currentPrice" class="original-price">¥{{ product.originalPrice }}</span>
       <span v-if="product.negotiable" class="negotiable-tag">可议价</span>
+      <span v-if="product.status === 'SOLD_OUT' || product.stock <= 0" class="soldout-tag">已售罄</span>
     </div>
     
     <div class="product-meta">
@@ -22,7 +23,9 @@
       </div>
       <div class="meta-item">
         <span class="meta-label">库存:</span>
-        <span class="meta-value">{{ product.stock || 0 }} 件</span>
+        <span class="meta-value" :class="{'stock-low': product.stock > 0 && product.stock <= 5, 'stock-out': product.stock <= 0}">
+          {{ product.stock > 0 ? `${product.stock} 件` : '无货' }}
+        </span>
       </div>
       <div v-if="product.size" class="meta-item">
         <span class="meta-label">尺寸大小:</span>
@@ -36,17 +39,33 @@
         <span class="meta-label">评分:</span>
         <span class="meta-value">{{ product.rating }} 分</span>
       </div>
+      <div class="meta-item">
+        <span class="meta-label">状态:</span>
+        <span class="meta-value" :class="getStatusClass(product.status)">
+          {{ formatStatus(product.status) }}
+        </span>
+      </div>
     </div>
     
     <div class="product-actions">
-      <button @click="$emit('add-to-cart')" class="btn-add-to-cart">加入购物车</button>
-      <button @click="$emit('buy-now')" class="btn-buy-now">立即购买</button>
+      <button @click="$emit('add-to-cart')" 
+              class="btn-add-to-cart" 
+              :disabled="!isProductAvailable"
+              :class="{'btn-disabled': !isProductAvailable}">
+        {{ isProductAvailable ? '加入购物车' : '已售罄' }}
+      </button>
+      <button @click="$emit('buy-now')" 
+              class="btn-buy-now" 
+              :disabled="!isProductAvailable"
+              :class="{'btn-disabled': !isProductAvailable}">
+        {{ isProductAvailable ? '立即购买' : '已售罄' }}
+      </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { defineProps, defineEmits } from 'vue';
+import { defineProps, defineEmits, computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 const props = defineProps({
@@ -58,6 +77,11 @@ const props = defineProps({
 
 defineEmits(['add-to-cart', 'buy-now']);
 const router = useRouter();
+
+// 判断商品是否可购买
+const isProductAvailable = computed(() => {
+  return props.product.status === 'ON_SALE' && props.product.stock > 0;
+});
 
 // 导航到商家主页
 const navigateToStore = () => {
@@ -80,6 +104,36 @@ const formatCondition = (condition) => {
   
   return conditionMap[condition] || condition;
 };
+
+// 格式化商品状态
+const formatStatus = (status) => {
+  if (!status) return '未知';
+  
+  const statusMap = {
+    'PENDING_APPROVAL': '待审核',
+    'REJECTED_RESUBMIT': '审核不通过',
+    'ON_SALE': '在售',
+    'LOCKED': '已锁定',
+    'SOLD_OUT': '已售罄',
+    'REMOVED_BY_SELLER': '已下架'
+  };
+  
+  return statusMap[status] || status;
+};
+
+// 获取状态对应的样式类
+const getStatusClass = (status) => {
+  const classMap = {
+    'PENDING_APPROVAL': 'status-pending',
+    'REJECTED_RESUBMIT': 'status-rejected',
+    'ON_SALE': 'status-onsale',
+    'LOCKED': 'status-locked',
+    'SOLD_OUT': 'status-soldout',
+    'REMOVED_BY_SELLER': 'status-removed'
+  };
+  
+  return classMap[status] || '';
+};
 </script>
 
 <style scoped>
@@ -99,6 +153,7 @@ const formatCondition = (condition) => {
   margin-bottom: 25px;
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
 }
 
 .current-price {
@@ -118,6 +173,16 @@ const formatCondition = (condition) => {
   margin-left: 15px;
   background-color: #fff4e5;
   color: #ff9800;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.soldout-tag {
+  margin-left: 15px;
+  background-color: #f5f5f5;
+  color: #999;
   padding: 4px 10px;
   font-size: 0.8rem;
   border-radius: 4px;
@@ -175,6 +240,26 @@ const formatCondition = (condition) => {
   transform: translateX(2px);
 }
 
+.stock-low {
+  color: #fa8c16;
+}
+
+.stock-out {
+  color: #f5222d;
+}
+
+.status-pending, .status-rejected {
+  color: #fa8c16;
+}
+
+.status-onsale {
+  color: #52c41a;
+}
+
+.status-locked, .status-soldout, .status-removed {
+  color: #f5222d;
+}
+
 .product-actions {
   display: flex;
   gap: 15px;
@@ -198,7 +283,7 @@ const formatCondition = (condition) => {
   border: 1px solid #ff4757;
 }
 
-.btn-add-to-cart:hover {
+.btn-add-to-cart:hover:not(:disabled) {
   background-color: #ffe5e5;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(255, 71, 87, 0.2);
@@ -209,9 +294,26 @@ const formatCondition = (condition) => {
   color: white;
 }
 
-.btn-buy-now:hover {
+.btn-buy-now:hover:not(:disabled) {
   background-color: #ff2c3e;
   transform: translateY(-2px);
   box-shadow: 0 4px 8px rgba(255, 71, 87, 0.3);
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none !important;
+  box-shadow: none !important;
+}
+
+.btn-add-to-cart.btn-disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  border-color: #d9d9d9;
+}
+
+.btn-buy-now.btn-disabled {
+  background-color: #d9d9d9;
 }
 </style> 

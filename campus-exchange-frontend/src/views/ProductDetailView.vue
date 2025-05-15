@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { productApi } from '@/api/all'
 import { fileApi } from '@/api/all'
+import { cartApi } from '@/api/cart'
 import { ElMessage } from 'element-plus'
 import ProductGallery from '@/components/product/ProductGallery.vue'
 import ProductInfo from '@/components/product/ProductInfo.vue'
@@ -120,8 +121,35 @@ const goBack = () => {
 }
 
 // 添加到购物车
-const handleAddToCart = () => {
-  ElMessage.warning('购物车功能尚未实现')
+const handleAddToCart = async () => {
+  // 检查用户是否登录
+  const userJson = localStorage.getItem('user')
+  if (!userJson) {
+    ElMessage.warning('请先登录后再添加到购物车')
+    router.push({
+      name: 'login',
+      query: { redirect: `/product/${productId.value}` }
+    })
+    return
+  }
+  
+  // 检查商品库存
+  if (!product.value || product.value.stock <= 0) {
+    ElMessage.error('商品库存不足')
+    return
+  }
+  
+  try {
+    const response = await cartApi.addToCart(product.value.id, 1)
+    if (response.data && response.data.code === 200) {
+      ElMessage.success('成功添加到购物车')
+    } else {
+      ElMessage.error('添加到购物车失败：' + (response.data?.message || '未知错误'))
+    }
+  } catch (err) {
+    console.error('添加到购物车失败:', err)
+    ElMessage.error('添加到购物车失败：' + (err.message || '网络错误'))
+  }
 }
 
 // 立即购买
@@ -150,6 +178,7 @@ const handleBuyNow = () => {
     productImage: productImage.value,
     price: product.value.currentPrice,
     quantity: 1,
+    stock: product.value.stock, // 添加库存信息
     sellerId: product.value.merchantId,
     sellerName: product.value.storeName || '未知卖家'
   }

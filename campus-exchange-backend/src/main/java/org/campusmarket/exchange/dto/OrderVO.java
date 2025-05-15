@@ -1,5 +1,6 @@
 package org.campusmarket.exchange.dto;
 
+import com.baomidou.mybatisplus.annotation.TableField;
 import lombok.Data;
 import org.campusmarket.exchange.entity.OrderItem;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
@@ -66,28 +67,15 @@ public class OrderVO {
     private TradeTypeEnum tradeType;
     
     /**
-     * 收货人姓名
+     * 快递公司 (非数据库字段)
      */
-    private String receiverName;
-    
-    /**
-     * 收货人手机号
-     */
-    private String receiverPhone;
-    
-    /**
-     * 收货地址
-     */
-    private String receiverAddress;
-    
-    /**
-     * 快递公司
-     */
+    @TableField(exist = false)
     private String expressCompany;
     
     /**
-     * 快递单号
+     * 快递单号 (非数据库字段)
      */
+    @TableField(exist = false)
     private String trackingNo;
     
     /**

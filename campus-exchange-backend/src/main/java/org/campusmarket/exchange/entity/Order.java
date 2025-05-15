@@ -55,21 +55,6 @@ public class Order {
     // 线下交易时间
     private LocalDateTime offlineMeetingTime;
     
-    // 收货人姓名
-    private String receiverName;
-    
-    // 收货人手机号
-    private String receiverPhone;
-    
-    // 收货地址
-    private String receiverAddress;
-    
-    // 快递公司
-    private String expressCompany;
-    
-    // 快递单号
-    private String trackingNo;
-    
     // 支付时间 (模拟)
     private LocalDateTime paymentTime;
     

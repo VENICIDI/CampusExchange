@@ -51,7 +51,7 @@
           <div class="order-body p-3">
             <div v-for="item in order.orderItems" :key="item.id" class="order-item d-flex mb-2">
               <div class="item-image">
-                <img :src="item.productImage || 'https://via.placeholder.com/80'" :alt="item.productName" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
+                <img :src="item.productImage || 'https://via.placeholder.com/80/e0e0e0/666666?text=商品'" :alt="item.productName" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
               </div>
               <div class="item-info ms-3 flex-grow-1">
                 <div class="item-name">{{ item.productName }}</div>
@@ -354,39 +354,99 @@ onMounted(() => {
 
 .status-filter .btn {
   min-width: 100px;
+  border-radius: 6px;
+  margin-right: 5px;
+  transition: all 0.2s ease;
 }
 
 .order-card {
   transition: all 0.3s ease;
+  border-radius: 12px;
+  overflow: hidden;
 }
 
 .order-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important;
+  transform: translateY(-3px);
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12) !important;
+}
+
+.order-header {
+  padding: 15px;
+  background-color: #f8faff;
 }
 
 .order-item {
   transition: background-color 0.2s;
-  padding: 10px;
-  border-radius: 5px;
+  padding: 15px;
+  border-radius: 8px;
+  margin-bottom: 10px;
 }
 
 .order-item:hover {
-  background-color: #f8f9fa;
+  background-color: #f0f7ff;
+}
+
+.order-footer {
+  background-color: #f9faff;
+  padding: 15px;
+}
+
+.item-image img {
+  border-radius: 8px;
+  transition: all 0.3s ease;
+  border: 1px solid #eee;
+}
+
+.item-image img:hover {
+  transform: scale(1.05);
 }
 
 .item-name {
-  font-weight: 500;
+  font-weight: 600;
   margin-bottom: 5px;
+  color: #333;
 }
 
 .price {
   color: #ff6b6b;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .total-price {
   font-size: 1.1rem;
+}
+
+.badge {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.btn-sm {
+  border-radius: 6px;
+  padding: 5px 12px;
+  transition: all 0.2s ease;
+}
+
+.btn-outline-primary:hover, .btn-primary:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(74, 110, 224, 0.25);
+}
+
+.btn-outline-danger:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px rgba(220, 53, 69, 0.25);
+}
+
+.pagination .page-link {
+  border-radius: 6px;
+  margin: 0 3px;
+  color: #4a6ee0;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: #4a6ee0;
+  border-color: #4a6ee0;
 }
 
 @media (max-width: 768px) {

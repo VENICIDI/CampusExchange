@@ -7,6 +7,9 @@ import org.campusmarket.exchange.dto.OrderDetailVO;
 import org.campusmarket.exchange.dto.OrderVO;
 import org.campusmarket.exchange.entity.Order;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
+import org.campusmarket.exchange.enums.TradeTypeEnum;
+
+import java.util.List;
 
 /**
  * 订单服务接口
@@ -20,6 +23,32 @@ public interface IOrderService extends IService<Order> {
      * @return 订单编号
      */
     String createOrder(Long userId, OrderCreateDTO orderDTO);
+    
+    /**
+     * 从购物车创建订单 (按商家拆分)
+     * @param userId 用户ID
+     * @param pointsUsed 使用的积分数量
+     * @param tradeType 交易方式
+     * @param offlineMeetingLocation 线下交易地点 (线下交易时必填)
+     * @param offlineMeetingTime 线下交易时间 (线下交易时必填)
+     * @return 订单编号列表
+     */
+    List<String> createOrderFromCart(Long userId, Integer pointsUsed, TradeTypeEnum tradeType, 
+                                    String offlineMeetingLocation, String offlineMeetingTime);
+    
+    /**
+     * 从购物车创建订单 (按商家拆分)
+     * @param userId 用户ID
+     * @param pointsUsed 使用的积分数量
+     * @param tradeType 交易方式
+     * @param offlineMeetingLocation 线下交易地点 (线下交易时必填)
+     * @param offlineMeetingTime 线下交易时间 (线下交易时必填)
+     * @param address 收货地址信息 (快递交易时可选)
+     * @return 订单编号列表
+     */
+    List<String> createOrderFromCart(Long userId, Integer pointsUsed, TradeTypeEnum tradeType, 
+                                    String offlineMeetingLocation, String offlineMeetingTime,
+                                    Object address);
     
     /**
      * 获取订单详情
@@ -76,8 +105,8 @@ public interface IOrderService extends IService<Order> {
      * 商家发货
      * @param merchantId 商家ID
      * @param orderNo 订单编号
-     * @param trackingNo 物流单号
-     * @param expressCompany 快递公司
+     * @param trackingNo 物流单号 (不再使用，保留仅为兼容性)
+     * @param expressCompany 快递公司 (不再使用，保留仅为兼容性)
      * @return 是否成功
      */
     boolean shipOrder(Long merchantId, String orderNo, String trackingNo, String expressCompany);

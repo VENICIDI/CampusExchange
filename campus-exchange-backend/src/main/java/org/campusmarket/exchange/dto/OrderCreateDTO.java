@@ -103,33 +103,10 @@ public class OrderCreateDTO {
         private String receiverPhone;
         
         /**
-         * 省份
+         * 完整地址
          */
-        @NotBlank(message = "省份不能为空")
-        private String province;
-        
-        /**
-         * 城市
-         */
-        @NotBlank(message = "城市不能为空")
-        private String city;
-        
-        /**
-         * 区/县
-         */
-        @NotBlank(message = "区/县不能为空")
-        private String district;
-        
-        /**
-         * 详细地址
-         */
-        @NotBlank(message = "详细地址不能为空")
-        private String detailAddress;
-        
-        /**
-         * 邮政编码
-         */
-        private String postalCode;
+        @NotBlank(message = "收货地址不能为空")
+        private String fullAddress;
         
         /**
          * 是否为默认地址

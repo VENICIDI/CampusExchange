@@ -557,7 +557,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         // 3. 减少库存
         Product updateProduct = new Product();
         updateProduct.setId(productId);
-        updateProduct.setStock(product.getStock() - quantity);
+        int newStock = product.getStock() - quantity;
+        updateProduct.setStock(newStock);
         
         // 4. 增加销量
         updateProduct.setSales(product.getSales() + quantity);
@@ -565,7 +566,13 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         // 5. 更新时间
         updateProduct.setUpdateTime(LocalDateTime.now());
         
-        // 6. 更新商品
+        // 6. 如果库存为零，自动将商品状态改为已售罄
+        if (newStock <= 0) {
+            log.info("商品[{}]库存为零，自动更新状态为已售罄", productId);
+            updateProduct.setStatus(ProductStatusEnum.SOLD_OUT);
+        }
+        
+        // 7. 更新商品
         return updateById(updateProduct);
     }
 } 
