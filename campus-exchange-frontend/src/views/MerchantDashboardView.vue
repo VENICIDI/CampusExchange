@@ -7,7 +7,7 @@
         <h2>{{ storeName }}</h2>
         <p class="merchant-description">{{ merchant.description }}</p>
         <div class="merchant-meta">
-          <span class="merchant-level">等级: {{ merchant.level }}</span>
+          <span class="merchant-level">等级: {{ merchantLevelName }}</span>
           <span class="merchant-since">开店时间: {{ new Date(merchant.createTime).toLocaleDateString() }}</span>
         </div>
       </div>
@@ -96,9 +96,9 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { productApi, merchantApi } from '@/api/all';
+import { productApi, merchantApi, orderApi } from '@/api/all';
 
 const router = useRouter();
 const storeName = ref('');
@@ -109,6 +109,22 @@ const products = ref([]);
 const user = ref(null);
 const merchant = ref(null);
 const isLoadingMerchant = ref(false);
+
+// 商家等级名称
+const merchantLevelName = computed(() => {
+  if (!merchant.value || !merchant.value.levelId) return '普通商家';
+  
+  // 根据商家等级ID获取对应的名称
+  const levelMap = {
+    1: '钻石商家',
+    2: '金牌商家',
+    3: '银牌商家',
+    4: '铜牌商家',
+    5: '普通商家'
+  };
+  
+  return levelMap[merchant.value.levelId] || '未知商家';
+});
 
 // 获取用户信息
 const fetchUserInfo = () => {
@@ -143,8 +159,14 @@ const fetchMerchantInfo = async (userId) => {
         // 使用API返回的商家名称
         storeName.value = merchant.value.storeName || user.value.username + "的店铺";
         
+        // 设置商家评分
+        rating.value = merchant.value.storePositiveRate || 100;
+        
         // 成功获取商家信息后加载商品
         await loadMerchantProducts();
+        
+        // 加载商家订单数量
+        await loadMerchantOrderCount();
       } else {
         console.error('未找到与用户关联的商家信息');
         // 如果没有商家信息，可以使用默认值
@@ -153,10 +175,11 @@ const fetchMerchantInfo = async (userId) => {
           userId: userId,
           storeName: user.value.username + "的店铺",
           description: "欢迎来到我的校园店铺！",
-          level: "普通商家",
+          levelId: 5,
           createTime: new Date().toISOString()
         };
         storeName.value = merchant.value.storeName;
+        rating.value = 100;
       }
     } else {
       console.error('获取商家信息失败:', response);
@@ -166,10 +189,11 @@ const fetchMerchantInfo = async (userId) => {
         userId: userId,
         storeName: user.value.username + "的店铺",
         description: "欢迎来到我的校园店铺！",
-        level: "普通商家",
+        levelId: 5,
         createTime: new Date().toISOString()
       };
       storeName.value = merchant.value.storeName;
+      rating.value = 100;
     }
   } catch (error) {
     console.error('获取商家信息失败:', error);
@@ -182,16 +206,18 @@ const fetchMerchantInfo = async (userId) => {
       userId: userId,
       storeName: user.value.username + "的店铺",
       description: "欢迎来到我的校园店铺！",
-      level: "普通商家",
+      levelId: 5,
       createTime: new Date().toISOString()
     };
     storeName.value = merchant.value.storeName;
+    rating.value = 100;
   } finally {
     isLoadingMerchant.value = false;
     
     // 如果此时已经有商家ID，尝试加载商品
     if (merchant.value && merchant.value.id) {
       await loadMerchantProducts();
+      await loadMerchantOrderCount();
     }
   }
 };
@@ -258,6 +284,40 @@ const loadMerchantProducts = async () => {
   }
 };
 
+// 加载商家订单数量
+const loadMerchantOrderCount = async () => {
+  if (!merchant.value || !merchant.value.id) {
+    console.error('商家信息不完整，无法获取订单数量');
+    return;
+  }
+  
+  try {
+    console.log('开始获取商家订单数量，商家ID:', merchant.value.id);
+    
+    // 使用orderApi获取商家订单数量，替换直接fetch请求
+    // 这样会自动带上身份验证信息
+    const response = await orderApi.getMerchantOrders({
+      pageNum: 1,
+      pageSize: 1
+    });
+    
+    console.log('获取商家订单数量响应:', response);
+    
+    if (response.data && response.data.code === 200 && response.data.data && typeof response.data.data.total === 'number') {
+      orderCount.value = response.data.data.total;
+      console.log('商家订单数量:', orderCount.value);
+    } else {
+      console.error('获取商家订单数量失败，无法解析响应数据:', response.data);
+      // 使用默认值
+      orderCount.value = merchant.value.totalSalesCount || 0;
+    }
+  } catch (error) {
+    console.error('获取商家订单数量出错:', error);
+    // 使用默认值
+    orderCount.value = merchant.value.totalSalesCount || 0;
+  }
+};
+
 // 获取状态文本
 const getStatusText = (status) => {
   const statusMap = {
@@ -291,7 +351,7 @@ const viewProducts = () => {
 // 查看订单
 const viewOrders = () => {
   // 这里可以实现跳转到订单管理页面的逻辑
-  console.log('查看订单');
+  router.push('/orders/merchant');
 };
 
 // 获取商品新旧程度对应的类名
@@ -360,10 +420,6 @@ const formatCondition = (condition) => {
 // 页面加载时获取数据
 onMounted(() => {
   fetchUserInfo();
-  
-  // 商家数据
-  orderCount.value = 0;  // 示例数据
-  rating.value = 100;    // 示例数据
 });
 </script>
 

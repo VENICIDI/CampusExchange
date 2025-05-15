@@ -50,12 +50,30 @@ public class UserContextFilter extends OncePerRequestFilter {
                     }
                 }
                 
+                // 尝试从请求头中获取用户角色
+                String roleHeader = request.getHeader("X-User-Role");
+                if (roleHeader != null && !roleHeader.isEmpty()) {
+                    // 将字符串角色转换为Integer
+                    Integer roleValue = null;
+                    if ("MERCHANT".equals(roleHeader)) {
+                        roleValue = 1;
+                    } else if ("ADMIN".equals(roleHeader)) {
+                        roleValue = 2;
+                    } else {
+                        roleValue = 0; // 默认USER
+                    }
+                    userDTO.setRole(roleValue);
+                    logger.debug("从请求头获取到角色: " + roleHeader + " -> " + roleValue);
+                }
+                
                 // 设置到UserContext
                 UserContext.setCurrentUser(userDTO);
+                
             } else {
                 // 尝试从请求头中获取用户信息
                 String userIdHeader = request.getHeader("X-User-Id");
                 String usernameHeader = request.getHeader("X-User-Name");
+                String roleHeader = request.getHeader("X-User-Role");
                 
                 if (userIdHeader != null && !userIdHeader.isEmpty() && 
                         usernameHeader != null && !usernameHeader.isEmpty()) {
@@ -63,6 +81,21 @@ public class UserContextFilter extends OncePerRequestFilter {
                         UserDTO userDTO = new UserDTO();
                         userDTO.setId(Long.parseLong(userIdHeader));
                         userDTO.setUsername(usernameHeader);
+                        
+                        // 处理角色
+                        if (roleHeader != null && !roleHeader.isEmpty()) {
+                            // 将字符串角色转换为Integer
+                            Integer roleValue = null;
+                            if ("MERCHANT".equals(roleHeader)) {
+                                roleValue = 1;
+                            } else if ("ADMIN".equals(roleHeader)) {
+                                roleValue = 2;
+                            } else {
+                                roleValue = 0; // 默认USER
+                            }
+                            userDTO.setRole(roleValue);
+                            logger.debug("从请求头获取到角色: " + roleHeader + " -> " + roleValue);
+                        }
                         
                         // 设置到UserContext
                         UserContext.setCurrentUser(userDTO);

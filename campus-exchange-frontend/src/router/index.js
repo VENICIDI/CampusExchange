@@ -11,6 +11,7 @@ import OrderConfirmView from '../views/OrderConfirmView.vue'
 import OrderDetailView from '../views/OrderDetailView.vue'
 import UserOrdersView from '../views/UserOrdersView.vue'
 import MerchantOrdersView from '../views/MerchantOrdersView.vue'
+import MerchantOrderDetailView from '@/views/MerchantOrderDetailView.vue'
 
 import CartView from '../views/CartView.vue'
 
@@ -120,7 +121,13 @@ const router = createRouter({
       path: '/orders/merchant',
       name: 'merchant-orders',
       component: MerchantOrdersView,
-      meta: { requiresAuth: true, roles: ['MERCHANT'] }
+      meta: { requiresAuth: true, role: 1 }
+    },
+    {
+      path: '/merchant/order/:orderNo',
+      name: 'merchant-order-detail',
+      component: MerchantOrderDetailView,
+      meta: { requiresAuth: true, role: 1 }
     }
   ],
 })

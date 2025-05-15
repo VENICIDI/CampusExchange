@@ -4,6 +4,7 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.campusmarket.exchange.dto.UserDTO;
 import org.campusmarket.exchange.util.UserContext;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
@@ -56,7 +57,28 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 UserContext.setUsername(username);
                 UserContext.setRole(role);
                 
-                logger.debug("已通过X-User-Id设置认证用户: " + userId);
+                // 用户角色转换并放入UserDTO对象
+                UserDTO userDTO = new UserDTO();
+                userDTO.setId(userIdLong);
+                userDTO.setUsername(username);
+                
+                // 将字符串角色转换为Integer
+                Integer roleValue = null;
+                if (role != null) {
+                    if ("MERCHANT".equals(role)) {
+                        roleValue = 1;
+                    } else if ("ADMIN".equals(role)) {
+                        roleValue = 2;
+                    } else {
+                        roleValue = 0; // 默认USER
+                    }
+                }
+                userDTO.setRole(roleValue);
+                
+                // 设置到UserContext
+                UserContext.setCurrentUser(userDTO);
+                
+                logger.debug("已通过X-User-Id设置认证用户: " + userId + ", 角色: " + role + " -> " + roleValue);
             } catch (NumberFormatException e) {
                 logger.error("X-User-Id解析失败: " + userId, e);
             }

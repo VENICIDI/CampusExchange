@@ -89,6 +89,11 @@ public class OrderVO {
     private LocalDateTime paymentTime;
     
     /**
+     * 收货地址信息（非数据库字段，从用户表获取）
+     */
+    private OrderAddressVO orderAddress;
+    
+    /**
      * 订单项列表（只包含简要信息）
      */
     private List<SimpleOrderItem> orderItems;
@@ -104,17 +109,59 @@ public class OrderVO {
     private String tradeTypeDesc;
     
     /**
+     * 收货地址VO
+     */
+    @Data
+    public static class OrderAddressVO {
+        /**
+         * 收件人
+         */
+        private String recipient;
+        
+        /**
+         * 收件人电话
+         */
+        private String phone;
+        
+        /**
+         * 完整地址
+         */
+        private String fullAddress;
+    }
+    
+    /**
      * 获取订单状态的中文描述
      */
     public String getStatusDesc() {
-        return status != null ? status.getDesc() : null;
+        if (status == null) return null;
+        
+        switch (status) {
+            case PENDING_PAYMENT: return "待付款";
+            case PENDING_SHIPMENT: return "待发货";
+            case SHIPPED: return "已发货";
+            case RECEIVED: return "已收货";
+            case COMPLETED: return "已完成";
+            case CANCELLED: return "已取消";
+            case RETURN_REQUESTED: return "申请退货";
+            case RETURN_APPROVED: return "退货审核通过";
+            case RETURN_GOODS_RECEIVED: return "收到退货";
+            case RETURNED: return "已退货退款";
+            case RETURN_REJECTED: return "拒绝退货";
+            default: return status.toString();
+        }
     }
     
     /**
      * 获取交易方式的中文描述
      */
     public String getTradeTypeDesc() {
-        return tradeType != null ? tradeType.getDesc() : null;
+        if (tradeType == null) return null;
+        
+        switch (tradeType) {
+            case EXPRESS: return "快递配送";
+            case OFFLINE: return "线下交易";
+            default: return tradeType.toString();
+        }
     }
     
     /**

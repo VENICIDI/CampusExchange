@@ -282,8 +282,18 @@ const handleUploadSuccess = (response, file, fileList) => {
   }
   
   if (response.code === 200 && response.data) {
-    console.log('原始上传图片URL:', response.data);
-    console.log('图片上传成功，当前图片列表:', productForm.imageUrls);
+    const imageUrl = response.data;
+    console.log('图片上传成功，URL:', imageUrl);
+    
+    // 确保不重复添加
+    if (!productForm.imageUrls.includes(imageUrl)) {
+      productForm.imageUrls.push(imageUrl);
+      console.log('已添加图片到imageUrls数组');
+    } else {
+      console.log('imageUrls已包含此图片，不重复添加');
+    }
+    
+    console.log('图片上传成功后的列表:', productForm.imageUrls);
   } else {
     ElMessage.error('图片上传失败：' + (response.message || '未知错误'));
   }
@@ -338,9 +348,22 @@ const customUpload = async (options) => {
       const originalUrl = result.data[0];
       console.log('服务器返回的原始图片URL:', originalUrl);
       
-      // 直接添加到表单的图片列表中
-      productForm.imageUrls = productForm.imageUrls || [];
-      productForm.imageUrls.push(originalUrl);
+      // 检查是否已存在相同URL
+      const alreadyExists = productForm.imageUrls.some(url => {
+        // 提取文件名进行比较
+        const existingFileName = url.split('/').pop();
+        const newFileName = originalUrl.split('/').pop();
+        return existingFileName === newFileName;
+      });
+      
+      if (!alreadyExists) {
+        // 直接添加到表单的图片列表中
+        productForm.imageUrls = productForm.imageUrls || [];
+        productForm.imageUrls.push(originalUrl);
+        console.log('添加新图片到列表，当前列表:', productForm.imageUrls);
+      } else {
+        console.log('图片已存在，不重复添加');
+      }
       
       // 调用成功回调
       options.onSuccess({ 
@@ -361,6 +384,10 @@ const customUpload = async (options) => {
 // 移除图片
 const handleRemove = (file, fileList) => {
   try {
+    console.log('触发删除图片:', file);
+    console.log('当前文件列表:', fileList);
+    console.log('删除前的imageUrls:', [...productForm.imageUrls]);
+    
     // 根据文件查找URL - 处理多种可能的数据格式
     let fileUrl;
     
@@ -373,22 +400,60 @@ const handleRemove = (file, fileList) => {
     }
     
     if (fileUrl) {
-      // 寻找原始URL的可能格式
-      const possibleUrlFormats = [
-        fileUrl,
-        processImageUrl(fileUrl),
-        fileUrl.replace(/^http:\/\/[^\/]+/, '') // 删除域名部分
-      ];
+      console.log('要删除的图片URL:', fileUrl);
       
-      // 查找URL并移除
-      for (const url of possibleUrlFormats) {
-        const index = productForm.imageUrls.indexOf(url);
-        if (index !== -1) {
-          productForm.imageUrls.splice(index, 1);
-          console.log('已移除图片URL:', url);
-          break;
+      // 提取文件名部分用于匹配
+      const fileName = fileUrl.split('/').pop();
+      console.log('提取的文件名:', fileName);
+      
+      // 更精确的匹配方式：匹配文件名而不是整个URL
+      if (fileName) {
+        // 找出包含这个文件名的URL并删除
+        const indexToRemove = productForm.imageUrls.findIndex(url => url.includes(fileName));
+        if (indexToRemove !== -1) {
+          productForm.imageUrls.splice(indexToRemove, 1);
+          console.log('通过文件名成功移除图片, 索引:', indexToRemove);
+        } else {
+          console.warn('未找到匹配的文件名:', fileName);
         }
       }
+      
+      // 作为备用，尝试旧的方式匹配完整URL
+      if (productForm.imageUrls.length === (fileList ? fileList.length + 1 : 1)) {
+        // 寻找原始URL的可能格式
+        const possibleUrlFormats = [
+          fileUrl,
+          processImageUrl(fileUrl),
+          fileUrl.replace(/^http:\/\/[^\/]+/, ''), // 删除域名部分
+          `/api${fileUrl.split('/api')[1]}` // 处理可能的路径差异
+        ];
+        
+        let removed = false;
+        // 查找URL并移除
+        for (const url of possibleUrlFormats) {
+          const index = productForm.imageUrls.indexOf(url);
+          if (index !== -1) {
+            productForm.imageUrls.splice(index, 1);
+            console.log('通过URL匹配成功移除图片:', url);
+            removed = true;
+            break;
+          }
+        }
+        
+        if (!removed) {
+          console.warn('通过URL未找到匹配项，尝试最后一种方法');
+          // 最后的方法：根据最新的fileList重建imageUrls
+          productForm.imageUrls = fileList.map(f => 
+            f.response?.data || f.url || ''
+          ).filter(url => url);
+        }
+      }
+    }
+    
+    console.log('删除后的imageUrls:', productForm.imageUrls);
+    // 强制重新验证imageUrls字段
+    if (productFormRef.value) {
+      productFormRef.value.validateField('imageUrls');
     }
   } catch (error) {
     console.error('移除图片出错:', error);
@@ -445,22 +510,11 @@ const submitForm = async () => {
       submitting.value = true;
       
       try {
-        // 将英文枚举值映射为中文
-        const conditionMap = {
-          'NEW': '全新',
-          'LIKE_NEW': '九成新',
-          'GOOD': '八成新',
-          'FAIR': '七成新',
-          'POOR': '六成新及以下'
-        };
-
-        // 使用condition和productCondition字段，确保后端能正确处理
+        // 构建提交数据
         const submitData = {
           ...productForm,
-          // 移除多余字段，避免后端混淆
-          condition: undefined,
-          // 设置正确的枚举值，使用中文描述
-          productCondition: conditionMap[productForm.condition]
+          // 确保使用正确的字段名和枚举值
+          productCondition: productForm.condition  // 直接使用英文枚举值
         };
         
         console.log('准备提交商品数据:', submitData);

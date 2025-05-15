@@ -1,5 +1,5 @@
 <template>
-  <div class="order-detail-container">
+  <div class="merchant-order-detail-container">
     <div class="container py-5">
       <div class="mb-4">
         <button class="btn-back" @click="goBack">
@@ -8,7 +8,7 @@
         </button>
       </div>
       
-      <h2 class="page-title mb-4">订单详情</h2>
+      <h2 class="page-title mb-4">商家订单详情</h2>
 
       <!-- 加载中状态 -->
       <div v-if="loading" class="text-center py-5">
@@ -26,8 +26,9 @@
       <!-- 订单详情内容 -->
       <div v-else-if="order" class="order-detail-content">
         <!-- 订单状态卡片 -->
-        <div class="card mb-4">
+        <div class="card mb-4 order-status-card">
           <div class="card-body">
+            <div class="merchant-badge mb-3">商家视图</div>
             <div class="order-status-section">
               <div class="status-line">
                 <h5 class="status-label">订单状态:</h5>
@@ -46,9 +47,9 @@
                 <span class="info-value">{{ formatDate(order.createTime) }}</span>
               </div>
               
-              <div v-if="order.merchantName" class="order-info-line">
-                <span class="info-label">店铺:</span>
-                <span class="info-value">{{ order.merchantName }}</span>
+              <div class="order-info-line">
+                <span class="info-label">买家:</span>
+                <span class="info-value buyer-name">{{ order.userName || '未知用户' }}</span>
               </div>
             </div>
 
@@ -71,180 +72,207 @@
             </div>
           </div>
         </div>
-
-        <!-- 商品信息卡片 -->
-        <div class="card mb-4">
-          <div class="card-header">
-            <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>商品信息</h5>
-          </div>
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table product-table mb-0">
-                <thead>
-                  <tr>
-                    <th class="text-center" width="120">商品图片</th>
-                    <th width="40%">商品信息</th>
-                    <th class="text-center" width="15%">单价</th>
-                    <th class="text-center" width="10%">数量</th>
-                    <th class="text-end" width="15%">小计</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr v-for="(item, index) in order.orderItems" :key="index">
-                    <td class="text-center">
-                        <img
-                        :src="item.productImage || item.productImageSnapshot || 'https://via.placeholder.com/70/e0e0e0/666666?text=商品'"
-                        :alt="item.productName || item.productNameSnapshot"
-                        class="product-image"
-                        >
-                    </td>
-                    <td>
-                      <div class="product-name">{{ item.productName || item.productNameSnapshot }}</div>
+        
+        <div class="row">
+          <div class="col-md-8">
+            <!-- 商品信息卡片 -->
+            <div class="card mb-4">
+              <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-shopping-cart me-2"></i>商品信息</h5>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive">
+                  <table class="table product-table mb-0">
+                    <thead>
+                      <tr>
+                        <th class="text-center" width="120">商品图片</th>
+                        <th width="40%">商品信息</th>
+                        <th class="text-center" width="15%">单价</th>
+                        <th class="text-center" width="10%">数量</th>
+                        <th class="text-end" width="15%">小计</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr v-for="(item, index) in order.orderItems" :key="index">
+                        <td class="text-center">
+                          <img
+                            :src="item.productImage || item.productImageSnapshot || 'https://via.placeholder.com/70/e0e0e0/666666?text=商品'"
+                            :alt="item.productName || item.productNameSnapshot"
+                            class="product-image"
+                          >
+                        </td>
+                        <td>
+                          <div class="product-name">{{ item.productName || item.productNameSnapshot }}</div>
                           <div class="specifications text-muted small" v-if="item.specifications">
                             {{ item.specifications }}
-                      </div>
-                    </td>
-                    <td class="text-center align-middle">¥{{ item.price || item.priceAtPurchase }}</td>
-                    <td class="text-center align-middle">{{ item.quantity }}</td>
-                    <td class="text-end align-middle">
-                      <strong class="item-total">¥{{ ((item.price || item.priceAtPurchase) * item.quantity).toFixed(2) }}</strong>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
+                          </div>
+                        </td>
+                        <td class="text-center align-middle">¥{{ item.price || item.priceAtPurchase }}</td>
+                        <td class="text-center align-middle">{{ item.quantity }}</td>
+                        <td class="text-end align-middle">
+                          <strong class="item-total">¥{{ ((item.price || item.priceAtPurchase) * item.quantity).toFixed(2) }}</strong>
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-md-4">
+            <!-- 买家信息 -->
+            <div class="card mb-4">
+              <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-user me-2"></i>买家信息</h5>
+              </div>
+              <div class="card-body">
+                <div class="buyer-info-item">
+                  <div class="info-label">买家用户名:</div>
+                  <div class="info-value">{{ order.userName || '未知用户' }}</div>
+                </div>
+                <!-- 更多买家信息可在此添加 -->
+              </div>
+            </div>
+
+            <!-- 订单金额信息 -->
+            <div class="card mb-4">
+              <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>订单金额</h5>
+              </div>
+              <div class="card-body">
+                <div class="price-details">
+                  <div class="d-flex justify-content-between mb-2">
+                    <span class="info-label">商品总额：</span>
+                    <span>¥{{ productTotalAmount }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between mb-2">
+                    <span class="info-label">运费：</span>
+                    <span>¥{{ order.shippingFee || 0 }}</span>
+                  </div>
+                  <div class="d-flex justify-content-between mb-2">
+                    <span class="info-label">平台服务费：</span>
+                    <span>¥{{ order.platformCommissionAmount || 0 }}</span>
+                  </div>
+                  <hr />
+                  <div class="d-flex justify-content-between fw-bold total-price">
+                    <span class="info-label">实付金额：</span>
+                    <span class="text-danger fs-5">¥{{ order.actualPaymentAmount }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- 收货信息和金额信息并排 -->
-        <div class="row">
-          <div class="col-md-6">
         <!-- 收货信息 -->
         <div class="card mb-4" v-if="order.tradeType === 'EXPRESS'">
           <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>收货信息</h5>
+            <h5 class="mb-0"><i class="fas fa-map-marker-alt me-2"></i>收货信息</h5>
           </div>
-              <div class="card-body address-info">
-                <p class="mb-1"><span class="info-label">收货人：</span> {{ order.orderAddress?.recipient }}</p>
-                <p class="mb-1"><span class="info-label">联系电话：</span> {{ order.orderAddress?.phone }}</p>
-                <p class="mb-3"><span class="info-label">收货地址：</span> {{ formatAddress(order.orderAddress) }}</p>
-                <p v-if="order.status === 'SHIPPED' || order.status === 'RECEIVED' || order.status === 'COMPLETED'">
-                  <span class="info-label">发货时间：</span> {{ formatDate(order.shippingTime) || '未知' }}
-                </p>
+          <div class="card-body address-info">
+            <p class="mb-1"><span class="info-label">收货人：</span> {{ order.orderAddress?.recipient }}</p>
+            <p class="mb-1"><span class="info-label">联系电话：</span> {{ order.orderAddress?.phone }}</p>
+            <p class="mb-3"><span class="info-label">收货地址：</span> {{ formatAddress(order.orderAddress) }}</p>
+            <p v-if="order.status === 'SHIPPED' || order.status === 'RECEIVED' || order.status === 'COMPLETED'">
+              <span class="info-label">发货时间：</span> {{ formatDate(order.shippingTime) || '未知' }}
+            </p>
           </div>
         </div>
 
         <!-- 线下交易信息 -->
         <div class="card mb-4" v-if="order.tradeType === 'OFFLINE'">
           <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-handshake me-2"></i>线下交易信息</h5>
+            <h5 class="mb-0"><i class="fas fa-handshake me-2"></i>线下交易信息</h5>
           </div>
-              <div class="card-body address-info">
-                <p class="mb-1"><span class="info-label">交易地点：</span> {{ order.offlineMeetingLocation || '未指定' }}</p>
-                <p class="mb-1"><span class="info-label">交易时间：</span> {{ formatDate(order.offlineMeetingTime) || '未指定' }}</p>
-              </div>
+          <div class="card-body address-info">
+            <p class="mb-1"><span class="info-label">交易地点：</span> {{ order.offlineMeetingLocation || '未指定' }}</p>
+            <p class="mb-1"><span class="info-label">交易时间：</span> {{ formatDate(order.offlineMeetingTime) || '未指定' }}</p>
           </div>
         </div>
 
-          <div class="col-md-6">
-        <!-- 订单金额信息 -->
+        <!-- 商家订单操作区 -->
         <div class="card mb-4">
           <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-calculator me-2"></i>订单金额</h5>
+            <h5 class="mb-0"><i class="fas fa-cog me-2"></i>订单操作</h5>
           </div>
           <div class="card-body">
-                <div class="price-details">
-            <div class="d-flex justify-content-between mb-2">
-                    <span class="info-label">商品总额：</span>
-                    <span>¥{{ productTotalAmount }}</span>
-            </div>
-            <div class="d-flex justify-content-between mb-2">
-                    <span class="info-label">运费：</span>
-              <span>¥{{ order.shippingFee || 0 }}</span>
-            </div>
-            <div class="d-flex justify-content-between mb-2">
-                    <span class="info-label">平台服务费：</span>
-              <span>¥{{ order.platformCommissionAmount || 0 }}</span>
-            </div>
-            <hr />
-                  <div class="d-flex justify-content-between fw-bold total-price">
-                    <span class="info-label">实付金额：</span>
-              <span class="text-danger fs-5">¥{{ order.actualPaymentAmount }}</span>
-                  </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- 订单操作区 -->
-            <div class="card mb-4">
-              <div class="card-header">
-                <h5 class="mb-0"><i class="fas fa-cog me-2"></i>订单操作</h5>
-              </div>
-          <div class="card-body">
-                <div class="d-flex justify-content-center">
-              <!-- 待付款状态 -->
+            <div class="d-flex justify-content-center">
+              <!-- 待发货状态 -->
               <button
-                v-if="order.status === 'PENDING_PAYMENT'"
-                @click="payOrder"
-                    class="btn btn-primary action-btn me-3"
+                v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'EXPRESS'"
+                @click="shipOrder"
+                class="btn btn-primary action-btn me-3"
               >
-                    <i class="fas fa-credit-card me-1"></i> 立即支付
+                <i class="fas fa-shipping-fast me-1"></i> 确认发货
               </button>
 
-                  <!-- 待付款 - 取消订单 -->
+              <!-- 退货申请处理 -->
               <button
-                v-if="order.status === 'PENDING_PAYMENT'"
-                @click="cancelOrder"
-                    class="btn btn-outline-danger action-btn"
+                v-if="order.status === 'RETURN_REQUESTED'"
+                @click="approveReturn"
+                class="btn btn-success action-btn me-3"
               >
-                    <i class="fas fa-times me-1"></i> 取消订单
+                <i class="fas fa-check me-1"></i> 同意退货
               </button>
 
-                  <!-- 已发货状态 - 确认收货 -->
               <button
-                v-if="order.status === 'SHIPPED'"
-                @click="confirmReceipt"
-                    class="btn btn-primary action-btn"
+                v-if="order.status === 'RETURN_REQUESTED'"
+                @click="rejectReturn"
+                class="btn btn-danger action-btn"
               >
-                    <i class="fas fa-check-circle me-1"></i> 确认收货
+                <i class="fas fa-times me-1"></i> 拒绝退货
               </button>
-
-                  <!-- 已收货状态 - 申请退货 -->
-              <button
-                v-if="order.status === 'RECEIVED'"
-                @click="requestReturn"
-                    class="btn btn-outline-primary action-btn"
-              >
-                    <i class="fas fa-undo me-1"></i> 申请退货/退款
-              </button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- 退货申请弹窗 -->
+    <!-- 发货弹窗 -->
+    <el-dialog
+      v-model="shipDialogVisible"
+      title="确认发货"
+      width="500px"
+    >
+      <div class="text-center">
+        <p class="mb-3">是否确认发货该订单？</p>
+        <p class="text-muted">订单号：{{ order?.orderNo }}</p>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="shipDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmShip" :loading="submitting">确认发货</el-button>
+        </span>
+      </template>
+    </el-dialog>
+
+    <!-- 退货处理弹窗 -->
     <el-dialog
       v-model="returnDialogVisible"
-      title="申请退货/退款"
+      :title="isApproveReturn ? '同意退货申请' : '拒绝退货申请'"
       width="500px"
     >
       <el-form ref="returnFormRef" :model="returnForm" label-width="100px">
-        <el-form-item label="退货原因" prop="reason">
+        <el-form-item label="处理备注" prop="remark">
           <el-input
-            v-model="returnForm.reason"
+            v-model="returnForm.remark"
             type="textarea"
             :rows="4"
-            placeholder="请详细描述退货原因"
+            :placeholder="isApproveReturn ? '请输入同意退货的备注信息，如退货地址等' : '请输入拒绝退货的原因'"
           ></el-input>
         </el-form-item>
       </el-form>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="returnDialogVisible = false">取消</el-button>
-          <el-button type="primary" @click="submitReturnRequest" :loading="submitting">提交申请</el-button>
+          <el-button
+            :type="isApproveReturn ? 'success' : 'danger'"
+            @click="confirmReturnProcess"
+            :loading="submitting"
+          >
+            {{ isApproveReturn ? '确认同意' : '确认拒绝' }}
+          </el-button>
         </span>
       </template>
     </el-dialog>
@@ -254,7 +282,7 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { orderApi } from '@/api/all';
+import { orderApi } from '@/api/order';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const route = useRoute();
@@ -264,11 +292,15 @@ const error = ref(null);
 const order = ref(null);
 const submitting = ref(false);
 
-// 退货申请表单
+// 发货弹窗
+const shipDialogVisible = ref(false);
+
+// 退货处理弹窗
 const returnDialogVisible = ref(false);
+const isApproveReturn = ref(true);
 const returnForm = reactive({
   orderNo: '',
-  reason: ''
+  remark: ''
 });
 
 // 获取订单详情
@@ -286,18 +318,7 @@ const fetchOrderDetail = async () => {
     const response = await orderApi.getOrderDetail(orderNo);
     if (response.data && response.data.code === 200) {
       order.value = response.data.data;
-      
-      // 添加调试信息输出
-      console.log('订单信息：', {
-        status: order.value.status,
-        statusType: typeof order.value.status,
-        orderNo: order.value.orderNo
-      });
-
-      // 如果有action=pay参数并且订单状态是待付款，自动弹出支付确认
-      if (route.query.action === 'pay' && order.value.status === 'PENDING_PAYMENT') {
-        payOrder();
-      }
+      console.log('商家订单详情:', order.value);
     } else {
       error.value = '获取订单详情失败：' + (response.data?.message || '未知错误');
     }
@@ -322,7 +343,7 @@ const formatAddress = (address) => {
   return address.fullAddress || '未提供详细地址';
 };
 
-// 订单的商品总额（解决显示NaN的问题）
+// 订单的商品总额
 const productTotalAmount = computed(() => {
   if (!order.value) return 0;
   return order.value.totalProductAmount || 0;
@@ -362,28 +383,28 @@ const orderTimeline = computed(() => {
     {
       title: '付款',
       icon: 'fas fa-credit-card',
-      time: formatDate(order.value.payTime),
+      time: formatDate(order.value.paymentTime),
       completed: ['PENDING_SHIPMENT', 'SHIPPED', 'RECEIVED', 'COMPLETED'].includes(order.value.status),
       active: order.value.status === 'PENDING_PAYMENT'
     },
     {
       title: '发货',
       icon: 'fas fa-shipping-fast',
-      time: formatDate(order.value.shipTime),
+      time: formatDate(order.value.shippingTime),
       completed: ['SHIPPED', 'RECEIVED', 'COMPLETED'].includes(order.value.status),
       active: order.value.status === 'PENDING_SHIPMENT'
     },
     {
       title: '收货',
       icon: 'fas fa-box-open',
-      time: formatDate(order.value.receiveTime),
+      time: formatDate(order.value.receiptConfirmationTime),
       completed: ['RECEIVED', 'COMPLETED'].includes(order.value.status),
       active: order.value.status === 'SHIPPED'
     },
     {
       title: '完成',
       icon: 'fas fa-check-circle',
-      time: formatDate(order.value.completeTime),
+      time: formatDate(order.value.completionTime),
       completed: order.value.status === 'COMPLETED',
       active: order.value.status === 'RECEIVED'
     }
@@ -411,38 +432,10 @@ const orderTimeline = computed(() => {
 
   // 如果是退货状态，添加退货节点
   if (['RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_GOODS_RECEIVED', 'RETURNED', 'RETURN_REJECTED'].includes(order.value.status)) {
-    const returnTimeline = [
-      {
-        title: '下单',
-        icon: 'fas fa-shopping-cart',
-        time: formatDate(order.value.createTime),
-        completed: true,
-        active: false
-      },
-      {
-        title: '付款',
-        icon: 'fas fa-credit-card',
-        time: formatDate(order.value.payTime),
-        completed: true,
-        active: false
-      },
-      {
-        title: '发货',
-        icon: 'fas fa-shipping-fast',
-        time: formatDate(order.value.shipTime),
-        completed: true,
-        active: false
-      },
-      {
-        title: '收货',
-        icon: 'fas fa-box-open',
-        time: formatDate(order.value.receiveTime),
-        completed: true,
-        active: false
-      }
-    ];
-
+    let returnTimeline;
+    
     if (order.value.status === 'RETURN_REQUESTED') {
+      returnTimeline = timeline.slice(0, 4); // 保留到收货
       returnTimeline.push({
         title: '申请退货',
         icon: 'fas fa-undo',
@@ -451,6 +444,7 @@ const orderTimeline = computed(() => {
         active: true
       });
     } else if (order.value.status === 'RETURN_APPROVED') {
+      returnTimeline = timeline.slice(0, 4);
       returnTimeline.push({
         title: '申请退货',
         icon: 'fas fa-undo',
@@ -465,37 +459,8 @@ const orderTimeline = computed(() => {
         completed: true,
         active: true
       });
-    } else if (order.value.status === 'RETURN_GOODS_RECEIVED') {
-      returnTimeline.push({
-        title: '申请退货',
-        icon: 'fas fa-undo',
-        time: formatDate(order.value.returnRequestTime),
-        completed: true,
-        active: false
-      });
-      returnTimeline.push({
-        title: '收到退货',
-        icon: 'fas fa-box',
-        time: formatDate(order.value.returnGoodsReceivedTime),
-        completed: true,
-        active: true
-      });
-    } else if (order.value.status === 'RETURNED') {
-      returnTimeline.push({
-        title: '申请退货',
-        icon: 'fas fa-undo',
-        time: formatDate(order.value.returnRequestTime),
-        completed: true,
-        active: false
-      });
-      returnTimeline.push({
-        title: '已退款',
-        icon: 'fas fa-exchange-alt',
-        time: formatDate(order.value.returnedTime),
-        completed: true,
-        active: true
-      });
     } else if (order.value.status === 'RETURN_REJECTED') {
+      returnTimeline = timeline.slice(0, 4);
       returnTimeline.push({
         title: '申请退货',
         icon: 'fas fa-undo',
@@ -510,130 +475,94 @@ const orderTimeline = computed(() => {
         completed: true,
         active: true
       });
+    } else if (order.value.status === 'RETURNED') {
+      returnTimeline = timeline.slice(0, 4);
+      returnTimeline.push({
+        title: '申请退货',
+        icon: 'fas fa-undo',
+        time: formatDate(order.value.returnRequestTime),
+        completed: true,
+        active: false
+      });
+      returnTimeline.push({
+        title: '已退款',
+        icon: 'fas fa-exchange-alt',
+        time: formatDate(order.value.returnedTime),
+        completed: true,
+        active: true
+      });
     }
-
+    
     return returnTimeline;
   }
 
   return timeline;
 });
 
-// 支付订单
-const payOrder = async () => {
+// 发货相关
+const shipOrder = () => {
+  shipDialogVisible.value = true;
+};
+
+const confirmShip = async () => {
+  submitting.value = true;
   try {
-    await ElMessageBox.confirm('确定要支付此订单吗？', '支付订单', {
-      confirmButtonText: '确定支付',
-      cancelButtonText: '取消',
-      type: 'info'
-    });
-
-    submitting.value = true;
-    const response = await orderApi.payOrder(order.value.orderNo);
-
+    const response = await orderApi.shipOrder(order.value.orderNo);
+    
     if (response.data && response.data.code === 200) {
-      ElMessage.success('订单支付成功');
-      // 刷新订单信息
-      fetchOrderDetail();
+      ElMessage.success('订单发货成功');
+      shipDialogVisible.value = false;
+      fetchOrderDetail(); // 刷新订单信息
     } else {
-      ElMessage.error('订单支付失败：' + (response.data?.message || '未知错误'));
+      ElMessage.error('订单发货失败：' + (response.data?.message || '未知错误'));
     }
   } catch (err) {
-    if (err !== 'cancel') {
-      console.error('支付订单出错:', err);
-      ElMessage.error('支付订单失败：' + (err.message || '网络错误'));
-    }
+    console.error('订单发货出错:', err);
+    ElMessage.error('订单发货失败：' + (err.message || '网络错误'));
   } finally {
     submitting.value = false;
   }
 };
 
-// 取消订单
-const cancelOrder = async () => {
-  try {
-    await ElMessageBox.confirm('确定要取消此订单吗？', '取消订单', {
-      confirmButtonText: '确定取消',
-      cancelButtonText: '不取消',
-      type: 'warning'
-    });
-
-    submitting.value = true;
-    const response = await orderApi.cancelOrder(order.value.orderNo);
-
-    if (response.data && response.data.code === 200) {
-      ElMessage.success('订单已取消');
-      // 刷新订单信息
-      fetchOrderDetail();
-    } else {
-      ElMessage.error('取消订单失败：' + (response.data?.message || '未知错误'));
-    }
-  } catch (err) {
-    if (err !== 'cancel') {
-      console.error('取消订单出错:', err);
-      ElMessage.error('取消订单失败：' + (err.message || '网络错误'));
-    }
-  } finally {
-    submitting.value = false;
-  }
-};
-
-// 确认收货
-const confirmReceipt = async () => {
-  try {
-    await ElMessageBox.confirm('确认已收到商品？', '确认收货', {
-      confirmButtonText: '确认收货',
-      cancelButtonText: '取消',
-      type: 'info'
-    });
-
-    submitting.value = true;
-    const response = await orderApi.confirmReceipt(order.value.orderNo);
-
-    if (response.data && response.data.code === 200) {
-      ElMessage.success('已确认收货');
-      // 刷新订单信息
-      fetchOrderDetail();
-    } else {
-      ElMessage.error('确认收货失败：' + (response.data?.message || '未知错误'));
-    }
-  } catch (err) {
-    if (err !== 'cancel') {
-      console.error('确认收货出错:', err);
-      ElMessage.error('确认收货失败：' + (err.message || '网络错误'));
-    }
-  } finally {
-    submitting.value = false;
-  }
-};
-
-// 申请退货
-const requestReturn = () => {
+// 退货处理相关
+const approveReturn = () => {
   returnForm.orderNo = order.value.orderNo;
-  returnForm.reason = '';
+  returnForm.remark = '';
+  isApproveReturn.value = true;
   returnDialogVisible.value = true;
 };
 
-// 提交退货申请
-const submitReturnRequest = async () => {
-  if (!returnForm.reason) {
-    ElMessage.warning('请填写退货原因');
+const rejectReturn = () => {
+  returnForm.orderNo = order.value.orderNo;
+  returnForm.remark = '';
+  isApproveReturn.value = false;
+  returnDialogVisible.value = true;
+};
+
+const confirmReturnProcess = async () => {
+  if (!returnForm.remark) {
+    ElMessage.warning('请填写处理备注');
     return;
   }
 
   submitting.value = true;
   try {
-    const response = await orderApi.requestReturn(returnForm.orderNo, returnForm.reason);
-
+    const response = await orderApi.processReturnRequest(
+      returnForm.orderNo,
+      isApproveReturn.value,
+      returnForm.remark
+    );
+    
     if (response.data && response.data.code === 200) {
-      ElMessage.success('退货申请已提交');
+      ElMessage.success(isApproveReturn.value ? '已同意退货申请' : '已拒绝退货申请');
       returnDialogVisible.value = false;
-      // 刷新订单信息
-      fetchOrderDetail();
+      fetchOrderDetail(); // 刷新订单信息
     } else {
-      ElMessage.error('提交退货申请失败：' + (response.data?.message || '未知错误'));
+      ElMessage.error('处理退货申请失败：' + (response.data?.message || '未知错误'));
     }
   } catch (err) {
-    console.error('提交退货申请出错:', err);
-    ElMessage.error('提交退货申请失败：' + (err.message || '网络错误'));
+    console.error('处理退货申请出错:', err);
+    ElMessage.error('处理退货申请失败：' + (err.message || '网络错误'));
   } finally {
     submitting.value = false;
   }
@@ -651,7 +580,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.order-detail-container {
+.merchant-order-detail-container {
   min-height: 90vh;
   background-color: #f8f9fa;
 }
@@ -694,6 +623,21 @@ onMounted(() => {
   font-size: 1.5rem;
 }
 
+.order-status-card {
+  background: linear-gradient(135deg, #f5f7ff 0%, #f0f4ff 100%);
+}
+
+.merchant-badge {
+  display: inline-block;
+  background-color: #4568dc;
+  color: white;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-weight: 500;
+  font-size: 0.8rem;
+  margin-bottom: 10px;
+}
+
 .order-status-section {
   padding: 5px 0 20px;
 }
@@ -726,6 +670,11 @@ onMounted(() => {
   color: #333;
 }
 
+.buyer-name {
+  color: #4568dc;
+  font-weight: 500;
+}
+
 .badge {
   padding: 6px 12px;
   font-size: 0.9rem;
@@ -740,7 +689,6 @@ onMounted(() => {
   border-radius: 8px;
   overflow: hidden;
   transition: all 0.3s ease;
-  height: calc(100% - 1.5rem);
 }
 
 .card-header {
@@ -763,6 +711,20 @@ onMounted(() => {
 
 .card-body {
   padding: 20px;
+}
+
+.buyer-info-item {
+  margin-bottom: 15px;
+}
+
+.buyer-info-item .info-label {
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 5px;
+}
+
+.buyer-info-item .info-value {
+  color: #333;
 }
 
 .table {
@@ -843,24 +805,14 @@ onMounted(() => {
   border: none;
 }
 
-.btn-outline-primary {
-  color: #4568dc;
-  border-color: #4568dc;
+.btn-success {
+  background: linear-gradient(45deg, #28a745, #5cce85);
+  border: none;
 }
 
-.btn-outline-primary:hover {
-  background-color: #4568dc;
-  color: white;
-}
-
-.btn-outline-danger {
-  color: #e74c3c;
-  border-color: #e74c3c;
-}
-
-.btn-outline-danger:hover {
-  background-color: #e74c3c;
-  color: white;
+.btn-danger {
+  background: linear-gradient(45deg, #dc3545, #f27380);
+  border: none;
 }
 
 .timeline-steps {
@@ -937,4 +889,27 @@ onMounted(() => {
   color: #6c757d;
   margin-top: 4px;
 }
-</style>
+
+@media (max-width: 768px) {
+  .timeline-steps {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .timeline-step {
+    width: 100%;
+    flex-direction: row;
+    margin-bottom: 1rem;
+  }
+  
+  .timeline-step:not(:last-child)::after {
+    display: none;
+  }
+  
+  .timeline-content {
+    margin-left: 15px;
+    margin-top: 0;
+    text-align: left;
+  }
+}
+</style> 

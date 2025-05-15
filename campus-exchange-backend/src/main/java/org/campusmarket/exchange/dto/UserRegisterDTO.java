@@ -62,12 +62,15 @@ public class UserRegisterDTO {
     // 店铺名称（仅商家用户需填写）
     private String shopName;
     
-    // 店铺地址（仅商家用户需填写）
-    private String shopAddress;
-    
     // 店铺简介（仅商家用户需填写）
     @Size(max = 500, message = "店铺简介不能超过500个字符")
     private String shopIntro;
+    
+    // 营业执照图片（Base64编码，仅商家用户需填写）
+    private String businessLicense;
+    
+    // 身份证图片（Base64编码，仅商家用户需填写）
+    private String idCard;
     
     // 验证码
     @NotBlank(message = "验证码不能为空")

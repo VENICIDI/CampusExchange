@@ -240,7 +240,10 @@ const canSubmit = computed(() => {
   }
 
   if (isOfflineTrade.value) {
-    return offlineTradeInfo.meetingLocation && offlineTradeInfo.meetingTime;
+    // 验证线下交易信息，包括日期格式
+    return offlineTradeInfo.meetingLocation && 
+           offlineTradeInfo.meetingTime && 
+           validateDate(offlineTradeInfo.meetingTime);
   } else {
     return address.value.recipient && address.value.phone && address.value.fullAddress;
   }
@@ -283,6 +286,35 @@ const totalAmount = computed(() => {
 const hasAddress = computed(() => {
   return address.value.recipient && address.value.phone && address.value.fullAddress;
 });
+
+// 日期验证函数
+const validateDate = (dateTimeStr) => {
+  if (!dateTimeStr) return false;
+  
+  // 检查是否是有效的日期时间格式
+  const date = new Date(dateTimeStr);
+  if (isNaN(date.getTime())) return false;
+  
+  // 检查年份是否合理 (2000-2099)
+  const year = date.getFullYear();
+  if (year < 2000 || year > 2099) return false;
+  
+  return true;
+};
+
+// 格式化日期时间为后端需要的格式 yyyy-MM-dd HH:mm:ss
+const formatDateTime = (dateTimeStr) => {
+  if (!dateTimeStr) return '';
+  
+  const date = new Date(dateTimeStr);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  const hours = String(date.getHours()).padStart(2, '0');
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  
+  return `${year}-${month}-${day} ${hours}:${minutes}:00`;
+};
 
 // 加载数据
 const loadData = async () => {
@@ -464,15 +496,21 @@ const submitOrder = async () => {
     if (isFromCart) {
       // 从购物车创建订单
       const cartOrderData = {
-        tradeType: isOfflineTrade.value ? '线下交易' : '快递配送',
+        tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS',
         pointsUsed: 0, // 暂不支持积分抵扣，设为0
       };
       
       // 添加线下交易信息
       if (isOfflineTrade.value) {
+        // 验证日期格式
+        if (!validateDate(offlineTradeInfo.meetingTime)) {
+          ElMessage.error('请输入有效的交易时间（年份必须在2000-2099之间）');
+          submitting.value = false;
+          return;
+        }
         cartOrderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
-        // 转换日期时间格式为后端要求的格式
-        cartOrderData.offlineMeetingTime = offlineTradeInfo.meetingTime.replace('T', ' ') + ':00';
+        // 使用格式化函数处理日期
+        cartOrderData.offlineMeetingTime = formatDateTime(offlineTradeInfo.meetingTime);
       }
       
       // 调用API从购物车创建订单
@@ -481,19 +519,45 @@ const submitOrder = async () => {
       if (response.data && response.data.code === 200) {
         // 获取订单号列表
         const orderNos = response.data.data;
+        console.log('购物车订单创建成功，订单号列表:', orderNos);
         
         // 清除本地存储
         localStorage.removeItem('orderFromCart');
+        
+        // 判断是否成功获取到订单号
+        if (!orderNos || orderNos.length === 0) {
+          ElMessage.warning('订单创建成功，但未获取到订单号，请前往订单列表查看');
+          router.push('/orders/user');
+          return;
+        }
         
         // 如果只有一个订单，直接跳转到订单详情
         if (orderNos.length === 1) {
           orderNo = orderNos[0];
           ElMessage.success('订单创建成功');
-          router.push(`/order/${orderNo}?action=pay`);
+          
+          // 添加延迟，给后端足够时间处理订单
+          setTimeout(() => {
+            // 确保订单号是字符串，并且是有效值
+            const orderNoStr = String(orderNo || '').trim();
+            if (orderNoStr) {
+              console.log('正在跳转到订单详情页，订单号:', orderNoStr);
+              router.push({
+                path: `/order/${orderNoStr}`,
+                query: { action: 'pay' }
+              });
+            } else {
+              console.error('订单号无效:', orderNo);
+              ElMessage.warning('订单创建成功，但跳转失败，请前往订单列表查看');
+              router.push('/orders/user');
+            }
+          }, 800);
         } else {
           // 如果有多个订单，跳转到订单列表
           ElMessage.success(`成功创建 ${orderNos.length} 个订单`);
-          router.push('/orders/user');
+          setTimeout(() => {
+            router.push('/orders/user');
+          }, 500);
         }
       } else {
         ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
@@ -507,14 +571,20 @@ const submitOrder = async () => {
           productId: orderPreview.value.productId,
           quantity: quantity.value // 使用用户选择的数量
         }],
-        tradeType: isOfflineTrade.value ? '线下交易' : '快递配送'
+        tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS'
       };
       
       // 添加收货地址或线下交易信息
       if (isOfflineTrade.value) {
+        // 验证日期格式
+        if (!validateDate(offlineTradeInfo.meetingTime)) {
+          ElMessage.error('请输入有效的交易时间（年份必须在2000-2099之间）');
+          submitting.value = false;
+          return;
+        }
         orderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
-        // 转换日期时间格式为后端要求的格式
-        orderData.offlineMeetingTime = offlineTradeInfo.meetingTime.replace('T', ' ') + ':00';
+        // 使用格式化函数处理日期
+        orderData.offlineMeetingTime = formatDateTime(offlineTradeInfo.meetingTime);
       } else {
         orderData.address = {
           receiverName: address.value.recipient,
@@ -530,13 +600,37 @@ const submitOrder = async () => {
       if (response.data && response.data.code === 200) {
         // 获取订单号
         orderNo = response.data.data;
+        console.log('订单创建成功，订单号:', orderNo);
+        
+        // 确保订单号不为null或undefined
+        if (!orderNo) {
+          ElMessage.warning('订单创建成功，但未获取到订单号，请前往订单列表查看');
+          router.push('/orders/user');
+          return;
+        }
         
         // 清除本地存储的订单预览
         localStorage.removeItem('orderPreview');
         
-        // 跳转到支付页面或订单详情页
+        // 跳转到支付页面或订单详情页，添加延迟以确保后端处理完成
         ElMessage.success('订单创建成功');
-        router.push(`/order/${orderNo}?action=pay`);
+        
+        // 添加延迟，给后端足够时间处理订单
+        setTimeout(() => {
+          // 确保订单号是字符串，并且是有效值
+          const orderNoStr = String(orderNo || '').trim();
+          if (orderNoStr) {
+            console.log('正在跳转到订单详情页，订单号:', orderNoStr);
+            router.push({
+              path: `/order/${orderNoStr}`,
+              query: { action: 'pay' }
+            });
+          } else {
+            console.error('订单号无效:', orderNo);
+            ElMessage.warning('订单创建成功，但跳转失败，请前往订单列表查看');
+            router.push('/orders/user');
+          }
+        }, 800);
       } else {
         ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
       }

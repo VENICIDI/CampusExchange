@@ -1,7 +1,10 @@
 <template>
   <div class="merchant-orders-container">
     <div class="container py-5">
-      <h2 class="mb-4">商家订单管理</h2>
+      <div class="page-header mb-4">
+        <h2 class="page-title">商家订单管理</h2>
+        <p class="text-muted small">管理和处理您的店铺订单，确保买家满意度</p>
+      </div>
       
       <!-- 订单状态筛选 -->
       <div class="status-filter mb-4">
@@ -39,13 +42,17 @@
             <div class="order-info">
               <span class="order-number">订单号: {{ order.orderNo }}</span>
               <span class="order-date ms-4">{{ formatDate(order.createTime) }}</span>
-              <span class="order-user ms-4">买家: {{ order.username || '未知用户' }}</span>
+              <span class="order-user ms-4 buyer-info">
+                <i class="fas fa-user me-1"></i>
+                买家: {{ order.userName || '未知用户' }}
+              </span>
             </div>
             <div class="order-status">
               <span class="badge" :class="getStatusBadgeClass(order.status)">
                 {{ orderApi.getStatusText(order.status) }}
               </span>
               <span class="ms-3 trade-type">
+                <i class="fas" :class="order.tradeType === 'EXPRESS' ? 'fa-truck' : 'fa-handshake'"></i>
                 {{ order.tradeType === 'EXPRESS' ? '快递配送' : '线下交易' }}
               </span>
             </div>
@@ -68,23 +75,24 @@
           </div>
           
           <!-- 收货信息 -->
-          <div v-if="order.tradeType === 'EXPRESS'" class="address-info p-3 border-top bg-light">
-            <div class="address-header mb-2">收货信息:</div>
-            <div class="address-body">
-              <span class="recipient">{{ order.orderAddress?.recipient }}</span>
-              <span class="phone ms-3">{{ order.orderAddress?.phone }}</span>
-              <div class="address-detail mt-1">
-                {{ order.orderAddress?.province }} {{ order.orderAddress?.city }} {{ order.orderAddress?.district }} {{ order.orderAddress?.detailAddress }}
-              </div>
+          <div v-if="order.tradeType === 'EXPRESS' && order.orderAddress" class="order-address px-3 pb-2">
+            <div class="address-tag mb-2">
+              <i class="fas fa-map-marker-alt me-1"></i> 收货信息:
+            </div>
+            <div class="address-content ms-4">
+              <p class="mb-1">收货人: {{ order.orderAddress.recipient }}</p>
+              <p class="mb-1">联系电话: {{ order.orderAddress.phone }}</p>
+              <p class="mb-0">收货地址: {{ order.orderAddress.fullAddress }}</p>
             </div>
           </div>
           
-          <!-- 线下交易信息 -->
-          <div v-else-if="order.tradeType === 'OFFLINE'" class="offline-info p-3 border-top bg-light">
-            <div class="offline-header mb-2">线下交易信息:</div>
-            <div class="offline-body">
-              <div><strong>交易地点:</strong> {{ order.offlineMeetingLocation || '暂无' }}</div>
-              <div><strong>交易时间:</strong> {{ formatDate(order.offlineMeetingTime) || '暂无' }}</div>
+          <div v-if="order.tradeType === 'OFFLINE'" class="order-address px-3 pb-2">
+            <div class="address-tag mb-2">
+              <i class="fas fa-map-pin me-1"></i> 线下交易信息:
+            </div>
+            <div class="address-content ms-4">
+              <p class="mb-1">交易地点: {{ order.offlineMeetingLocation || '未指定' }}</p>
+              <p class="mb-0">交易时间: {{ formatDate(order.offlineMeetingTime) || '未指定' }}</p>
             </div>
           </div>
           
@@ -95,28 +103,28 @@
               <span class="commission ms-3 text-muted">平台佣金：¥{{ order.platformCommissionAmount }}</span>
             </div>
             <div class="order-actions">
-              <router-link :to="`/order/${order.orderNo}`" class="btn btn-sm btn-outline-primary me-2">
-                查看详情
+              <router-link :to="`/merchant/order/${order.orderNo}`" class="btn btn-sm btn-outline-primary me-2">
+                <i class="fas fa-eye me-1"></i>查看详情
               </router-link>
               
               <!-- 待发货状态 -->
               <button v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'EXPRESS'" 
                       @click="openShipDialog(order.orderNo)" 
                       class="btn btn-sm btn-primary">
-                发货
+                <i class="fas fa-shipping-fast me-1"></i>发货
               </button>
               
               <!-- 退货申请处理 -->
               <button v-if="order.status === 'RETURN_REQUESTED'" 
                       @click="handleReturnRequest(order.orderNo, true)" 
                       class="btn btn-sm btn-success me-2">
-                同意退货
+                <i class="fas fa-check me-1"></i>同意退货
               </button>
               
               <button v-if="order.status === 'RETURN_REQUESTED'" 
                       @click="handleReturnRequest(order.orderNo, false)" 
                       class="btn btn-sm btn-danger">
-                拒绝退货
+                <i class="fas fa-times me-1"></i>拒绝退货
               </button>
             </div>
           </div>
@@ -281,6 +289,7 @@ const fetchOrders = async () => {
     if (response.data && response.data.code === 200) {
       orders.value = response.data.data.records || [];
       total.value = response.data.data.total || 0;
+      console.log('订单数据:', orders.value);
     } else {
       ElMessage.error('获取订单列表失败：' + (response.data?.message || '未知错误'));
     }
@@ -415,76 +424,209 @@ onMounted(() => {
   background-color: #f8f9fa;
 }
 
-.status-filter .btn-group {
+.page-header {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+  margin-bottom: 25px;
+}
+
+.page-title {
+  color: #333;
+  font-weight: 600;
+  margin-bottom: 5px;
+}
+
+.status-filter {
+  margin-bottom: 20px;
   overflow-x: auto;
   white-space: nowrap;
+  padding-bottom: 10px;
+}
+
+.status-filter .btn-group {
   display: flex;
-  margin-bottom: 1rem;
+  flex-wrap: nowrap;
 }
 
 .status-filter .btn {
   min-width: 100px;
+  font-size: 0.9rem;
+  border-radius: 30px;
+  margin-right: 8px;
+  padding: 8px 15px;
+  transition: all 0.3s ease;
 }
 
 .order-card {
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   transition: all 0.3s ease;
 }
 
 .order-card:hover {
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
   transform: translateY(-2px);
-  box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important;
 }
 
-.order-item {
-  transition: background-color 0.2s;
-  padding: 10px;
-  border-radius: 5px;
+.order-header {
+  background-color: #f9f9f9;
+  padding: 15px !important;
 }
 
-.order-item:hover {
-  background-color: #f8f9fa;
+.order-number {
+  font-weight: 600;
+  color: #444;
 }
 
-.item-name {
-  font-weight: 500;
-  margin-bottom: 5px;
-}
-
-.price {
-  color: #ff6b6b;
-  font-weight: 500;
-}
-
-.total-price {
-  font-size: 1.1rem;
-}
-
-.address-info, .offline-info {
+.order-date {
+  color: #666;
   font-size: 0.9rem;
 }
 
+.buyer-info {
+  color: #4568dc;
+  font-weight: 500;
+}
+
+.badge {
+  padding: 6px 12px;
+  font-weight: 500;
+  border-radius: 4px;
+}
+
 .trade-type {
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   color: #666;
 }
 
+.order-body {
+  padding: 15px !important;
+}
+
+.order-item {
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 10px;
+  margin-bottom: 10px !important;
+}
+
+.item-image img {
+  width: 70px;
+  height: 70px;
+  object-fit: cover;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+}
+
+.item-name {
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 5px;
+}
+
+.item-price-qty {
+  margin-top: 8px;
+}
+
+.price {
+  font-weight: 600;
+  color: #e74c3c;
+}
+
+.qty {
+  color: #666;
+}
+
+.order-address {
+  background-color: #f3f7ff;
+  border-radius: 0 0 8px 8px;
+  padding: 12px 15px;
+  margin-top: -10px;
+  font-size: 0.9rem;
+}
+
+.address-tag {
+  font-weight: 600;
+  color: #4568dc;
+}
+
+.address-content {
+  color: #666;
+}
+
+.address-content p {
+  margin-bottom: 5px;
+}
+
+.order-footer {
+  padding: 15px !important;
+}
+
+.total-price {
+  font-weight: 500;
+}
+
+.order-actions .btn {
+  border-radius: 4px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.order-actions .btn:hover {
+  transform: translateY(-2px);
+}
+
+.btn-primary {
+  background: linear-gradient(45deg, #4568dc, #5d7ef0);
+  border: none;
+}
+
+.btn-outline-primary {
+  color: #4568dc;
+  border-color: #4568dc;
+}
+
+.pagination {
+  margin-top: 20px;
+}
+
+.pagination .page-link {
+  color: #4568dc;
+  border-color: #dee2e6;
+}
+
+.pagination .page-item.active .page-link {
+  background-color: #4568dc;
+  border-color: #4568dc;
+}
+
+.pagination .page-item.disabled .page-link {
+  color: #6c757d;
+}
+
 @media (max-width: 768px) {
-  .order-header, .order-footer {
+  .order-header {
     flex-direction: column;
-    align-items: flex-start;
+    align-items: flex-start !important;
   }
   
-  .order-status, .order-actions {
+  .order-status {
     margin-top: 10px;
   }
   
-  .order-item {
+  .order-date,
+  .order-user {
+    display: block;
+    margin-left: 0 !important;
+    margin-top: 5px;
+  }
+  
+  .order-footer {
     flex-direction: column;
   }
   
-  .item-info {
-    margin-left: 0;
-    margin-top: 10px;
+  .order-actions {
+    margin-top: 15px;
   }
 }
 </style> 

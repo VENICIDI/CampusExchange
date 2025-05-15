@@ -168,13 +168,47 @@
             </div>
             
             <div class="form-group">
-              <label for="shopAddress">店铺地址</label>
-              <input
-                type="text"
-                id="shopAddress"
-                v-model="registerForm.shopAddress"
-                placeholder="请输入店铺地址"
-              />
+              <label for="businessLicense">营业执照 <span class="required">*</span></label>
+              <div class="upload-container">
+                <input
+                  type="file"
+                  id="businessLicense"
+                  ref="businessLicenseInput"
+                  accept="image/*"
+                  @change="handleBusinessLicenseUpload"
+                  :required="registerForm.isMerchant"
+                />
+                <button type="button" class="upload-btn" @click="triggerBusinessLicenseUpload">
+                  选择文件
+                </button>
+                <span class="file-name">{{ businessLicenseFileName || '未选择文件' }}</span>
+                <div class="preview-container" v-if="registerForm.businessLicense">
+                  <img :src="registerForm.businessLicense" alt="营业执照预览" class="image-preview" />
+                </div>
+              </div>
+              <div class="error-message" v-if="errors.businessLicense">{{ errors.businessLicense }}</div>
+            </div>
+            
+            <div class="form-group">
+              <label for="idCard">身份证照片 <span class="required">*</span></label>
+              <div class="upload-container">
+                <input
+                  type="file"
+                  id="idCard"
+                  ref="idCardInput"
+                  accept="image/*"
+                  @change="handleIdCardUpload"
+                  :required="registerForm.isMerchant"
+                />
+                <button type="button" class="upload-btn" @click="triggerIdCardUpload">
+                  选择文件
+                </button>
+                <span class="file-name">{{ idCardFileName || '未选择文件' }}</span>
+                <div class="preview-container" v-if="registerForm.idCard">
+                  <img :src="registerForm.idCard" alt="身份证预览" class="image-preview" />
+                </div>
+              </div>
+              <div class="error-message" v-if="errors.idCard">{{ errors.idCard }}</div>
             </div>
             
             <div class="form-group">
@@ -259,10 +293,11 @@ const registerForm = ref({
   wechat: '',
   isMerchant: false,
   shopName: '',
-  shopAddress: '',
   shopIntro: '',
-  captcha: '',          // 验证码值
-  captchaKey: ''        // 验证码ID，与后端UserRegisterDTO字段对应
+  businessLicense: '',
+  idCard: '',
+  captcha: '',
+  captchaKey: ''
 });
 
 // 错误信息
@@ -273,6 +308,8 @@ const errors = ref({
   phone: '',
   email: '',
   shopName: '',
+  businessLicense: '',
+  idCard: '',
   captcha: '',
   general: ''
 });
@@ -296,6 +333,77 @@ const strengthColor = computed(() => {
 
 const updatePasswordStrength = () => {
   passwordStrength.value = checkPasswordStrength(registerForm.value.password);
+};
+
+// 文件上传相关
+const businessLicenseInput = ref(null);
+const idCardInput = ref(null);
+const businessLicenseFileName = ref('');
+const idCardFileName = ref('');
+
+// 触发文件选择框
+const triggerBusinessLicenseUpload = () => {
+  businessLicenseInput.value.click();
+};
+
+const triggerIdCardUpload = () => {
+  idCardInput.value.click();
+};
+
+// 处理营业执照上传
+const handleBusinessLicenseUpload = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  businessLicenseFileName.value = file.name;
+  errors.value.businessLicense = '';
+  
+  // 文件大小限制 (2MB)
+  if (file.size > 2 * 1024 * 1024) {
+    errors.value.businessLicense = '文件大小不能超过2MB';
+    return;
+  }
+  
+  // 验证是否为图片类型
+  if (!file.type.match('image.*')) {
+    errors.value.businessLicense = '请上传图片格式的文件';
+    return;
+  }
+  
+  // 创建文件预览
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    registerForm.value.businessLicense = e.target.result;
+  };
+  reader.readAsDataURL(file);
+};
+
+// 处理身份证上传
+const handleIdCardUpload = (event) => {
+  const file = event.target.files[0];
+  if (!file) return;
+  
+  idCardFileName.value = file.name;
+  errors.value.idCard = '';
+  
+  // 文件大小限制 (2MB)
+  if (file.size > 2 * 1024 * 1024) {
+    errors.value.idCard = '文件大小不能超过2MB';
+    return;
+  }
+  
+  // 验证是否为图片类型
+  if (!file.type.match('image.*')) {
+    errors.value.idCard = '请上传图片格式的文件';
+    return;
+  }
+  
+  // 创建文件预览
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    registerForm.value.idCard = e.target.result;
+  };
+  reader.readAsDataURL(file);
 };
 
 // 获取验证码
@@ -436,6 +544,8 @@ const validateForm = () => {
     phone: '',
     email: '',
     shopName: '',
+    businessLicense: '',
+    idCard: '',
     captcha: '',
     general: ''
   };
@@ -471,9 +581,21 @@ const validateForm = () => {
   }
 
   // 验证商家信息(如果是商家)
-  if (registerForm.value.isMerchant && !registerForm.value.shopName.trim()) {
-    errors.value.shopName = '店铺名称不能为空';
-    isValid = false;
+  if (registerForm.value.isMerchant) {
+    if (!registerForm.value.shopName.trim()) {
+      errors.value.shopName = '店铺名称不能为空';
+      isValid = false;
+    }
+    
+    if (!registerForm.value.businessLicense) {
+      errors.value.businessLicense = '营业执照不能为空';
+      isValid = false;
+    }
+    
+    if (!registerForm.value.idCard) {
+      errors.value.idCard = '身份证照片不能为空';
+      isValid = false;
+    }
   }
 
   // 验证验证码
@@ -510,15 +632,16 @@ const handleRegister = async () => {
       phone: registerForm.value.phone || '',
       email: registerForm.value.email || '',
       city: registerForm.value.city || '',
-      gender: registerForm.value.gender || null, // 使用枚举类型对应的字符串
+      gender: registerForm.value.gender || null,
       personalIntro: registerForm.value.personalIntro || '',
       wechat: registerForm.value.wechat || '',
       
       // 商家相关信息
       isMerchant: registerForm.value.isMerchant === true,
       shopName: registerForm.value.isMerchant ? (registerForm.value.shopName || '') : '',
-      shopAddress: registerForm.value.isMerchant ? (registerForm.value.shopAddress || '') : '',
-      shopIntro: registerForm.value.isMerchant ? (registerForm.value.shopIntro || '') : ''
+      shopIntro: registerForm.value.isMerchant ? (registerForm.value.shopIntro || '') : '',
+      businessLicense: registerForm.value.isMerchant ? registerForm.value.businessLicense : '',
+      idCard: registerForm.value.isMerchant ? registerForm.value.idCard : ''
     };
 
     console.log('提交注册数据:', {
@@ -548,8 +671,9 @@ const handleRegister = async () => {
       wechat: '',
       isMerchant: false,
       shopName: '',
-      shopAddress: '',
       shopIntro: '',
+      businessLicense: '',
+      idCard: '',
       captcha: '',
       captchaKey: ''
     };
@@ -1155,5 +1279,58 @@ textarea {
   content: "⚠️";
   font-size: 14px;
   margin-right: 8px;
+}
+
+.upload-container {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.upload-container input[type="file"] {
+  display: none;
+}
+
+.upload-btn {
+  background-color: #4a6ee0;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background-color 0.3s;
+}
+
+.upload-btn:hover {
+  background-color: #3a5bcf;
+}
+
+.file-name {
+  flex-grow: 1;
+  font-size: 14px;
+  color: #666;
+  margin-left: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 200px;
+}
+
+.preview-container {
+  width: 100%;
+  margin-top: 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 5px;
+  background-color: #f9f9f9;
+}
+
+.image-preview {
+  width: 100%;
+  max-height: 150px;
+  object-fit: contain;
 }
 </style> 

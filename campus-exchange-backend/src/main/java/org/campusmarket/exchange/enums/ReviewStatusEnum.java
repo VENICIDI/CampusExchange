@@ -13,9 +13,9 @@ public enum ReviewStatusEnum {
     REVIEWED("REVIEWED", "已评价");
     
     @EnumValue
+    @JsonValue
     private final String code;
     
-    @JsonValue
     private final String desc;
     
     ReviewStatusEnum(String code, String desc) {

@@ -23,9 +23,9 @@ public enum OrderStatusEnum {
     RETURN_REJECTED("RETURN_REJECTED", "拒绝退货");
     
     @EnumValue
+    @JsonValue
     private final String code;
     
-    @JsonValue
     private final String desc;
     
     OrderStatusEnum(String code, String desc) {

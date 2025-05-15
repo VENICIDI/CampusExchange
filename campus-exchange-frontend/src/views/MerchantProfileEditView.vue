@@ -33,12 +33,12 @@
               </div>
 
               <el-form-item label="用户名" prop="username">
-                <el-input v-model="basicForm.username" disabled></el-input>
-                <small>用户名无法修改</small>
+                <el-input v-model="basicForm.username"></el-input>
               </el-form-item>
 
               <el-form-item label="真实姓名" prop="realName">
-                <el-input v-model="basicForm.realName"></el-input>
+                <el-input v-model="basicForm.realName" disabled></el-input>
+                <small>真实姓名已经过审核，无法修改</small>
               </el-form-item>
 
               <el-form-item label="手机号码" prop="phone">
@@ -88,7 +88,7 @@
                     </div>
                   </div>
                   <el-button type="primary" size="small" @click="triggerLicenseUpload">
-                    {{ businessLicenseUrl ? '更换图片' : '上传图片' }}
+                    {{ businessLicenseUrl ? '更新图片' : '上传图片' }}
                   </el-button>
                   <input
                     type="file"
@@ -110,7 +110,7 @@
                     </div>
                   </div>
                   <el-button type="primary" size="small" @click="triggerIdCardUpload">
-                    {{ idCardUrl ? '更换图片' : '上传图片' }}
+                    {{ idCardUrl ? '更新图片' : '上传图片' }}
                   </el-button>
                   <input
                     type="file"
@@ -362,7 +362,7 @@ const handleAvatarChange = async (event) => {
 
       // 可选：如果希望上传后立即保存整个用户profile，可以在这里调用
       // await saveUserData();
-      // 但通常是用户编辑完所有信息后，点击“保存”按钮才统一保存
+      // 但通常是用户编辑完所有信息后，点击"保存"按钮才统一保存
     } else {
       // 检查 response.data 是否存在，以及 message 是否为有效字符串
       const errorMessage = response.data && response.data.message ? response.data.message : '头像上传成功，但未能获取有效图片URL';
@@ -415,16 +415,53 @@ const handleLicenseChange = async (event) => {
   formData.append('file', file);
 
   try {
+    console.log('开始上传营业执照文件:', file.name, '大小:', file.size, '类型:', file.type);
     const response = await fileApi.uploadFile(formData);
-    if (response.data.code === 200) {
-      businessLicenseUrl.value = processImageUrl(response.data.data);
-      storeForm.businessLicense = response.data.data;
-      ElMessage.success('营业执照上传成功');
+    console.log('营业执照上传响应:', response);
+    
+    if (response.data && response.data.code === 200) {
+      // 确定获取的图片URL (可能在data或message中)
+      let imageUrl = '';
+      if (response.data.data) {
+        imageUrl = response.data.data;
+      } else if (response.data.message && typeof response.data.message === 'string' && 
+                (response.data.message.startsWith('http') || response.data.message.startsWith('/'))) {
+        imageUrl = response.data.message;
+      }
+      
+      if (imageUrl) {
+        console.log('获取到的营业执照URL:', imageUrl);
+        // 使用处理过的URL进行显示
+        businessLicenseUrl.value = imageUrl;
+        // 商家表单中存储原始的完整URL
+        storeForm.businessLicense = imageUrl;
+        ElMessage.success('营业执照上传成功');
+        
+        // 尝试立即保存营业执照更改
+        if (merchantData.value && merchantData.value.id) {
+          try {
+            const updateData = {
+              id: merchantData.value.id,
+              businessLicense: imageUrl
+            };
+            await merchantApi.updateMerchant(updateData);
+            console.log('营业执照信息已自动保存');
+          } catch (saveError) {
+            console.error('自动保存营业执照信息失败:', saveError);
+          }
+        }
+      } else {
+        console.error('未能从响应中获取有效的图片URL:', response.data);
+        ElMessage.error('营业执照上传成功，但未能获取图片地址');
+      }
     } else {
       ElMessage.error(response.data.message || '营业执照上传失败');
     }
   } catch (error) {
     console.error('上传营业执照出错:', error);
+    if (error.response) {
+      console.error('服务器响应:', error.response.status, error.response.data);
+    }
     ElMessage.error('上传营业执照失败，请稍后重试');
   }
 
@@ -458,16 +495,53 @@ const handleIdCardChange = async (event) => {
   formData.append('file', file);
 
   try {
+    console.log('开始上传身份证文件:', file.name, '大小:', file.size, '类型:', file.type);
     const response = await fileApi.uploadFile(formData);
-    if (response.data.code === 200) {
-      idCardUrl.value = processImageUrl(response.data.data);
-      storeForm.idCard = response.data.data;
-      ElMessage.success('身份证上传成功');
+    console.log('身份证上传响应:', response);
+    
+    if (response.data && response.data.code === 200) {
+      // 确定获取的图片URL (可能在data或message中)
+      let imageUrl = '';
+      if (response.data.data) {
+        imageUrl = response.data.data;
+      } else if (response.data.message && typeof response.data.message === 'string' && 
+                (response.data.message.startsWith('http') || response.data.message.startsWith('/'))) {
+        imageUrl = response.data.message;
+      }
+      
+      if (imageUrl) {
+        console.log('获取到的身份证URL:', imageUrl);
+        // 使用处理过的URL进行显示
+        idCardUrl.value = imageUrl;
+        // 商家表单中存储原始的完整URL
+        storeForm.idCard = imageUrl;
+        ElMessage.success('身份证上传成功');
+        
+        // 尝试立即保存身份证更改
+        if (merchantData.value && merchantData.value.id) {
+          try {
+            const updateData = {
+              id: merchantData.value.id,
+              idCard: imageUrl
+            };
+            await merchantApi.updateMerchant(updateData);
+            console.log('身份证信息已自动保存');
+          } catch (saveError) {
+            console.error('自动保存身份证信息失败:', saveError);
+          }
+        }
+      } else {
+        console.error('未能从响应中获取有效的图片URL:', response.data);
+        ElMessage.error('身份证上传成功，但未能获取图片地址');
+      }
     } else {
       ElMessage.error(response.data.message || '身份证上传失败');
     }
   } catch (error) {
     console.error('上传身份证出错:', error);
+    if (error.response) {
+      console.error('服务器响应:', error.response.status, error.response.data);
+    }
     ElMessage.error('上传身份证失败，请稍后重试');
   }
 

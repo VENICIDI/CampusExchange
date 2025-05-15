@@ -16,9 +16,9 @@ public enum ProductConditionEnum {
     POOR("POOR", "六成新及以下");
     
     @EnumValue
+    @JsonValue
     private final String code;
     
-    @JsonValue
     private final String desc;
     
     ProductConditionEnum(String code, String desc) {

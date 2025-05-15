@@ -49,6 +49,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     private ProductMapper productMapper;
     
     @Resource
+    private ProductImageMapper productImageMapper;
+    
+    @Resource
     private MerchantMapper merchantMapper;
     
     @Resource
@@ -560,8 +563,42 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         detailVO.setUserName(user != null ? user.getUsername() : "未知用户");
         detailVO.setMerchantName(merchant != null ? merchant.getStoreName() : "未知商家");
         
+        // 5.1 补充商品详细信息
+        if (orderItems != null && !orderItems.isEmpty()) {
+            for (OrderItem item : orderItems) {
+                // 如果订单项没有保存商品图片，则从商品图片表获取
+                if (item.getProductImageSnapshot() == null || item.getProductImageSnapshot().isEmpty()) {
+                    // 查询商品的主图
+                    LambdaQueryWrapper<ProductImage> imageQuery = Wrappers.<ProductImage>lambdaQuery()
+                            .eq(ProductImage::getProductId, item.getProductId())
+                            .eq(ProductImage::getIsMain, true)
+                            .last("LIMIT 1");
+                    
+                    ProductImage productImage = productImageMapper.selectOne(imageQuery);
+                    if (productImage != null) {
+                        item.setProductImageSnapshot(productImage.getImageUrl());
+                    }
+                }
+            }
+        }
+        
         // 设置订单项
         detailVO.setOrderItems(orderItems);
+        
+        // 6. 设置收货地址信息（仅快递交易方式）
+        if (order.getTradeType() == TradeTypeEnum.EXPRESS && user != null && user.getDefaultAddress() != null) {
+            String defaultAddress = user.getDefaultAddress();
+            String[] addressParts = defaultAddress.split(",");
+            
+            if (addressParts.length >= 3) {
+                OrderDetailVO.OrderAddressVO addressVO = new OrderDetailVO.OrderAddressVO();
+                addressVO.setRecipient(addressParts[0]);
+                addressVO.setPhone(addressParts[1]);
+                addressVO.setFullAddress(addressParts[2]);
+                
+                detailVO.setOrderAddress(addressVO);
+            }
+        }
         
         return detailVO;
     }
@@ -892,10 +929,26 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         BeanUtils.copyProperties(order, vo);
         
         // 获取买家信息
+        User user = null;
         if (order.getUserId() != null) {
-            User user = userMapper.selectById(order.getUserId());
+            user = userMapper.selectById(order.getUserId());
             if (user != null) {
                 vo.setUserName(user.getUsername());
+                
+                // 添加地址信息（仅快递交易方式）
+                if (order.getTradeType() == TradeTypeEnum.EXPRESS && user.getDefaultAddress() != null) {
+                    String defaultAddress = user.getDefaultAddress();
+                    String[] addressParts = defaultAddress.split(",");
+                    
+                    if (addressParts.length >= 3) {
+                        OrderVO.OrderAddressVO addressVO = new OrderVO.OrderAddressVO();
+                        addressVO.setRecipient(addressParts[0]);
+                        addressVO.setPhone(addressParts[1]);
+                        addressVO.setFullAddress(addressParts[2]);
+                        
+                        vo.setOrderAddress(addressVO);
+                    }
+                }
             }
         }
         
@@ -909,6 +962,23 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         // 获取订单项
         List<OrderItem> items = orderItemMapper.selectByOrderId(order.getId());
+        
+        // 补充商品图片信息
+        for (OrderItem item : items) {
+            if (item.getProductImageSnapshot() == null || item.getProductImageSnapshot().isEmpty()) {
+                // 查询商品的主图
+                LambdaQueryWrapper<ProductImage> imageQuery = Wrappers.<ProductImage>lambdaQuery()
+                        .eq(ProductImage::getProductId, item.getProductId())
+                        .eq(ProductImage::getIsMain, true)
+                        .last("LIMIT 1");
+                
+                ProductImage productImage = productImageMapper.selectOne(imageQuery);
+                if (productImage != null) {
+                    item.setProductImageSnapshot(productImage.getImageUrl());
+                }
+            }
+        }
+        
         List<OrderVO.SimpleOrderItem> simpleItems = items.stream()
                 .map(OrderVO.SimpleOrderItem::fromOrderItem)
                 .collect(Collectors.toList());

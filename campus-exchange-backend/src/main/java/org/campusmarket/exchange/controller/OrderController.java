@@ -2,6 +2,7 @@ package org.campusmarket.exchange.controller;
 
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -118,15 +119,50 @@ public class OrderController {
     public Result<Page<OrderVO>> getMerchantOrders(
             @RequestParam(required = false) OrderStatusEnum status,
             @RequestParam(defaultValue = "1") Integer pageNum,
-            @RequestParam(defaultValue = "10") Integer pageSize) {
+            @RequestParam(defaultValue = "10") Integer pageSize,
+            HttpServletRequest request) {
+        System.out.println("======================");
+        System.out.println("请求路径: " + request.getRequestURI());
+        System.out.println("请求方法: " + request.getMethod());
+        System.out.println("请求来源: " + request.getRemoteAddr());
+        System.out.println("======================");
+        
+        // 打印所有请求头，用于调试
+        java.util.Enumeration<String> headerNames = request.getHeaderNames();
+        System.out.println("所有请求头信息:");
+        while (headerNames.hasMoreElements()) {
+            String headerName = headerNames.nextElement();
+            System.out.println(headerName + ": " + request.getHeader(headerName));
+        }
+        System.out.println("======================");
+        
         UserDTO currentUser = UserContext.getCurrentUser();
+        System.out.println("UserContext.getCurrentUser() 结果: " + currentUser);
+        
         if (currentUser == null) {
+            System.out.println("当前用户为null，尝试从请求头中获取信息");
+            // 尝试重新从请求头获取信息
+            String userId = request.getHeader("X-User-Id");
+            String username = request.getHeader("X-User-Name");
+            String role = request.getHeader("X-User-Role");
+            System.out.println("请求头中的用户ID: " + userId);
+            System.out.println("请求头中的用户名: " + username);
+            System.out.println("请求头中的角色: " + role);
+            
             throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
         }
         
-        // 检查是否为商家
+        // 检查是否为商家 - 打印日志便于调试
+        System.out.println("当前用户信息: " + currentUser);
         Integer role = currentUser.getRole();
-        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+        System.out.println("当前用户角色值(Integer类型): " + role);
+        System.out.println("当前用户角色值类型: " + (role != null ? role.getClass().getName() : "null"));
+        System.out.println("当前用户名: " + currentUser.getUsername());
+        System.out.println("MERCHANT枚举ordinal: " + RoleEnum.MERCHANT.ordinal());
+        
+        // 使用1作为商家角色的固定值，避免依赖ordinal()方法
+        if (role == null || role != 1) {
+            System.out.println("用户角色不是商家，role: " + role);
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以查看商家订单");
         }
         
@@ -200,7 +236,10 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+        System.out.println("发货操作 - 当前用户角色: " + role + ", 用户名: " + currentUser.getUsername());
+        
+        // 使用固定值1判断是否为商家
+        if (role == null || role != 1) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以发货");
         }
         
@@ -253,7 +292,10 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+        System.out.println("处理退款申请 - 当前用户角色: " + role + ", 用户名: " + currentUser.getUsername());
+        
+        // 使用固定值1判断是否为商家
+        if (role == null || role != 1) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以处理退款申请");
         }
         

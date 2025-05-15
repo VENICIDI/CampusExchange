@@ -129,6 +129,17 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
                         throw new BusinessException("店铺名称不能为空");
                     }
                     
+                    // 检查必要的图片字段
+                    if (registerDTO.getBusinessLicense() == null || registerDTO.getBusinessLicense().isEmpty()) {
+                        System.out.println("商家注册缺少营业执照图片");
+                        throw new BusinessException("营业执照图片不能为空");
+                    }
+                    
+                    if (registerDTO.getIdCard() == null || registerDTO.getIdCard().isEmpty()) {
+                        System.out.println("商家注册缺少身份证图片");
+                        throw new BusinessException("身份证图片不能为空");
+                    }
+                    
                     merchant.setStoreName(registerDTO.getShopName());
                     
                     // 店铺简介可以为空
@@ -136,9 +147,9 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
                         merchant.setDescription(registerDTO.getShopIntro());
                     }
                     
-                    // 设置营业执照和身份证图片URL (实际项目中应该处理文件上传)
-                    merchant.setBusinessLicense("待上传"); // 需要实际的文件URL
-                    merchant.setIdCard("待上传"); // 需要实际的文件URL
+                    // 设置营业执照和身份证图片URL (使用前端传来的Base64图片数据)
+                    merchant.setBusinessLicense(registerDTO.getBusinessLicense());
+                    merchant.setIdCard(registerDTO.getIdCard());
                     
                     // 设置默认的商家等级为5（最低等级）
                     merchant.setLevelId(5L);

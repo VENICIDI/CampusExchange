@@ -14,9 +14,9 @@ public enum TradeTypeEnum {
     OFFLINE("OFFLINE", "线下交易");
     
     @EnumValue
+    @JsonValue
     private final String code;
     
-    @JsonValue
     private final String desc;
     
     TradeTypeEnum(String code, String desc) {
