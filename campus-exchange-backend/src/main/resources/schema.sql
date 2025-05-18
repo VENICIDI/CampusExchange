@@ -28,8 +28,8 @@ CREATE TABLE `user` (
 CREATE TABLE `merchant` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '商家ID (主键)',
   `user_id` BIGINT NOT NULL COMMENT '关联的用户ID (外键)',
-  `business_license` VARCHAR(255) NOT NULL COMMENT '营业执照图片URL',
-  `id_card` VARCHAR(255) NOT NULL COMMENT '身份证图片URL',
+  `business_license` TEXT NOT NULL COMMENT '营业执照图片URL',
+  `id_card` TEXT NOT NULL COMMENT '身份证图片URL',
   `store_name` VARCHAR(100) NOT NULL COMMENT '店铺名称',
   `level_id` BIGINT NOT NULL COMMENT '商家等级ID (外键, 关联merchant_level表)', -- 修改: 关联等级表ID
   `total_sales_count` INT NOT NULL DEFAULT 0 COMMENT '总销量（商品件数）', -- 修改: 更明确为件数
@@ -44,6 +44,12 @@ CREATE TABLE `merchant` (
   CONSTRAINT `fk_merchant_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_merchant_level` FOREIGN KEY (`level_id`) REFERENCES `merchant_level` (`id`) -- 新增外键
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商家信息表';
+
+
+-- 修改merchant表中的字段类型，以支持更大的图片数据（Base64编码）[修改使用的，已经改完了]
+-- ALTER TABLE merchant 
+-- MODIFY COLUMN business_license MEDIUMTEXT NOT NULL COMMENT '营业执照图片URL',
+-- MODIFY COLUMN id_card MEDIUMTEXT NOT NULL COMMENT '身份证图片URL';
 
 -- 3. 商家等级配置表 (merchant_level)
 CREATE TABLE `merchant_level` (
@@ -358,52 +364,4 @@ CREATE TABLE `user_blacklist` (
   UNIQUE KEY `uk_user_scope_target` (`user_id`, `scope`, `target_merchant_id`),
   INDEX `idx_user_id_active` (`user_id`, `is_active`),
   INDEX `idx_target_merchant_id` (`target_merchant_id`),
-  CONSTRAINT `fk_blacklist_user` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_blacklist_operator` FOREIGN KEY (`operator_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_blacklist_target_merchant` FOREIGN KEY (`target_merchant_id`) REFERENCES `merchant` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='用户黑名单表';
-
--- 20. 商家惩罚记录表 (merchant_penalty_record) -- 表名修改
-CREATE TABLE `merchant_penalty_record` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '惩罚记录ID (主键)',
-  `merchant_id` BIGINT NOT NULL COMMENT '被惩罚商家ID',
-  `admin_id` BIGINT NOT NULL COMMENT '操作管理员ID',
-  `penalty_type` ENUM('TEMP_BAN_POSTING', 'UNLIST_ALL_PRODUCTS', 'SHOP_CLOSURE') NOT NULL COMMENT '惩罚类型：TEMP_BAN_POSTING-限时禁止发布, UNLIST_ALL_PRODUCTS-下架所有商品, SHOP_CLOSURE-店铺关闭', -- 修改: 类型更明确
-  `reason` VARCHAR(500) NOT NULL COMMENT '惩罚原因',
-  `ban_end_time` DATETIME DEFAULT NULL COMMENT '封禁结束时间 (针对限时类型)', -- 字段名修改
-  `is_active` TINYINT(1) NOT NULL DEFAULT 1 COMMENT '当前是否生效：1-是，0-否', -- 字段名修改
-  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_merchant_id_active` (`merchant_id`, `is_active`),
-  INDEX `idx_admin_id` (`admin_id`),
-  CONSTRAINT `fk_penalty_merchant` FOREIGN KEY (`merchant_id`) REFERENCES `merchant` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_penalty_admin` FOREIGN KEY (`admin_id`) REFERENCES `user` (`id`) ON DELETE RESTRICT -- 管理员删除时，不级联删除其操作记录
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='商家惩罚记录表';
-
--- 21. 图片验证码记录表 (image_captcha) -- 表名修改
-CREATE TABLE `image_captcha` (
-  `id` VARCHAR(36) NOT NULL COMMENT '验证码实例的唯一UUID (主键)', -- 修改: UUID作为主键
-  `code_text` VARCHAR(10) NOT NULL COMMENT '验证码文本', -- 字段名修改
-  `image_base64` TEXT NOT NULL COMMENT '验证码图片Base64数据', -- 字段名修改
-  `expires_at` DATETIME NOT NULL COMMENT '过期时间', -- 字段名修改
-  `is_used` TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否已使用：0-否，1-是',
-  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_expires_at_is_used` (`expires_at`, `is_used`) -- 修改: 组合索引，便于清理
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='图片验证码记录表';
-
--- 22. 轮播图表 (banner)
-CREATE TABLE `banner` (
-  `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '轮播图ID (主键)',
-  `title` VARCHAR(100) DEFAULT NULL COMMENT '标题',
-  `image_url` VARCHAR(255) NOT NULL COMMENT '图片URL',
-  `link_type` ENUM('NONE', 'PRODUCT', 'MERCHANT_STORE', 'CATEGORY', 'EXTERNAL_URL') DEFAULT 'NONE' COMMENT '链接类型: NONE-无链接, PRODUCT-商品详情, MERCHANT_STORE-商家店铺, CATEGORY-分类页, EXTERNAL_URL-外部链接', -- 新增: 链接类型
-  `link_target` VARCHAR(255) DEFAULT NULL COMMENT '链接目标 (商品ID, 商家ID, 分类ID, 或外部URL)', -- 新增: 链接目标
-  `sort_order` INT NOT NULL DEFAULT 0 COMMENT '排序序号', -- 字段名修改
-  `status` ENUM('ENABLED', 'DISABLED') NOT NULL DEFAULT 'ENABLED' COMMENT '状态：ENABLED-启用，DISABLED-禁用',
-  `create_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
-  `update_time` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  INDEX `idx_status_sort_order` (`status`, `sort_order`) -- 修改: 组合索引
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='轮播图表';
+  CONSTRAINT `

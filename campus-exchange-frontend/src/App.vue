@@ -1,11 +1,13 @@
 <script setup>
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch, onErrorCaptured } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 
 const router = useRouter()
 const route = useRoute()
 const currentYear = new Date().getFullYear()
 const user = ref(null)
+const hasError = ref(false)
+const errorMsg = ref('')
 
 // 计算属性：当前是否在登录/注册页面
 const isAuthPage = computed(() => {
@@ -18,6 +20,43 @@ const isLoggedIn = computed(() => {
   console.log('用户登录状态:', loggedIn, user.value);
   return loggedIn;
 })
+
+// 错误捕获
+onErrorCaptured((err, instance, info) => {
+  console.error('组件错误被捕获:', err);
+  console.error('错误信息:', info);
+  hasError.value = true;
+  errorMsg.value = err.message || '页面渲染出错';
+  
+  // 如果是路由组件错误，尝试重新加载或返回首页
+  if (window.__ERROR_COUNT === undefined) {
+    window.__ERROR_COUNT = 1;
+  } else {
+    window.__ERROR_COUNT++;
+  }
+  
+  if (window.__ERROR_COUNT > 2 && route.path !== '/') {
+    console.log('检测到多次错误，尝试返回首页');
+    window.__ERROR_COUNT = 0;
+    setTimeout(() => {
+      router.push('/');
+    }, 100);
+  }
+  
+  // 返回false允许错误继续传播到全局处理器
+  return false;
+})
+
+// 尝试恢复页面
+const handleRetry = () => {
+  hasError.value = false;
+  errorMsg.value = '';
+  if (route.path === '/') {
+    window.location.reload();
+  } else {
+    router.go(0); // 刷新当前页面
+  }
+}
 
 // 从本地存储获取用户信息
 const getUserFromStorage = () => {
@@ -131,6 +170,7 @@ onUnmounted(() => {
               <router-link to="/" class="role-link" :class="{ 'router-link-active': $route.path === '/' }">买家首页</router-link>
               <router-link to="/merchant" class="role-link" :class="{ 'router-link-active': $route.path === '/merchant' }">商家中心</router-link>
             </div>
+            <router-link to="/user/profile" class="auth-link">个人信息</router-link>
             <a href="#" @click.prevent="handleLogout" class="auth-link">退出</a>
           </div>
         </template>
@@ -151,7 +191,21 @@ onUnmounted(() => {
   </header>
 
   <main class="main">
-    <router-view />
+    <!-- 错误处理显示 -->
+    <div v-if="hasError" class="error-container">
+      <div class="error-box">
+        <div class="error-icon">⚠️</div>
+        <h3>页面加载错误</h3>
+        <p>{{ errorMsg || '加载内容时发生错误' }}</p>
+        <div class="error-actions">
+          <button @click="handleRetry" class="retry-btn">重试</button>
+          <button @click="router.push('/')" class="home-btn">返回首页</button>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 正常内容 -->
+    <router-view v-else />
   </main>
 
   <footer class="footer">
@@ -380,5 +434,57 @@ onUnmounted(() => {
 .role-link.router-link-active {
   background-color: #4a6ee0;
   color: #ffffff;
+}
+
+.error-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.error-box {
+  background-color: #fff;
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.error-icon {
+  font-size: 48px;
+  color: #ff0000;
+  margin-bottom: 10px;
+}
+
+.error-actions {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.retry-btn,
+.home-btn {
+  padding: 10px 20px;
+  background-color: #4a6ee0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.retry-btn:hover,
+.home-btn:hover {
+  background-color: #304b99;
 }
 </style>

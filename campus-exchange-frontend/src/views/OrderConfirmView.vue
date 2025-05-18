@@ -161,10 +161,6 @@
               <span class="payment-label">运费</span>
               <span class="payment-value">¥{{ isOfflineTrade ? '0.00' : shippingFee.toFixed(2) }}</span>
             </div>
-            <div class="payment-item">
-              <span class="payment-label">平台服务费</span>
-              <span class="payment-value">¥{{ serviceFee.toFixed(2) }}</span>
-            </div>
             <div class="payment-total">
               <span class="total-label">实付金额</span>
               <span class="total-value">¥{{ totalAmount.toFixed(2) }}</span>
@@ -279,7 +275,7 @@ const serviceFee = ref(0); // 平台服务费
 const totalAmount = computed(() => {
   const productTotal = orderPreview.value.price * quantity.value;
   const shipping = isOfflineTrade.value ? 0 : shippingFee.value;
-  return productTotal + shipping + serviceFee.value;
+  return productTotal + shipping;
 });
 
 // 判断是否有收货地址
@@ -394,8 +390,7 @@ const loadData = async () => {
     
     // 设置费用
     shippingFee.value = 0; // 假设免运费
-    serviceFee.value = Math.round(orderPreview.value.price * quantity.value * 0.05 * 100) / 100; // 5%平台服务费
-    
+      
   } catch (err) {
     console.error('加载订单数据出错:', err);
     error.value = '加载订单数据出错，请重试';
@@ -471,9 +466,6 @@ const updateQuantity = (newQuantity) => {
   } else {
     quantity.value = newQuantity;
   }
-  
-  // 更新服务费
-  serviceFee.value = Math.round(orderPreview.value.price * quantity.value * 0.05 * 100) / 100;
 };
 
 // 提交订单
@@ -516,49 +508,21 @@ const submitOrder = async () => {
       // 调用API从购物车创建订单
       const response = await orderApi.createOrderFromCart(cartOrderData);
       
+      console.log('购物车创建订单完整响应:', response);
+      
       if (response.data && response.data.code === 200) {
         // 获取订单号列表
         const orderNos = response.data.data;
-        console.log('购物车订单创建成功，订单号列表:', orderNos);
+        console.log('购物车订单创建成功，订单号列表类型:', typeof orderNos, '值:', orderNos);
         
         // 清除本地存储
         localStorage.removeItem('orderFromCart');
         
-        // 判断是否成功获取到订单号
-        if (!orderNos || orderNos.length === 0) {
-          ElMessage.warning('订单创建成功，但未获取到订单号，请前往订单列表查看');
+        // 不管是否获取到订单号，都直接跳转到订单列表
+        ElMessage.success('订单创建成功');
+        setTimeout(() => {
           router.push('/orders/user');
-          return;
-        }
-        
-        // 如果只有一个订单，直接跳转到订单详情
-        if (orderNos.length === 1) {
-          orderNo = orderNos[0];
-          ElMessage.success('订单创建成功');
-          
-          // 添加延迟，给后端足够时间处理订单
-          setTimeout(() => {
-            // 确保订单号是字符串，并且是有效值
-            const orderNoStr = String(orderNo || '').trim();
-            if (orderNoStr) {
-              console.log('正在跳转到订单详情页，订单号:', orderNoStr);
-              router.push({
-                path: `/order/${orderNoStr}`,
-                query: { action: 'pay' }
-              });
-            } else {
-              console.error('订单号无效:', orderNo);
-              ElMessage.warning('订单创建成功，但跳转失败，请前往订单列表查看');
-              router.push('/orders/user');
-            }
-          }, 800);
-        } else {
-          // 如果有多个订单，跳转到订单列表
-          ElMessage.success(`成功创建 ${orderNos.length} 个订单`);
-          setTimeout(() => {
-            router.push('/orders/user');
-          }, 500);
-        }
+        }, 500);
       } else {
         ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
       }
@@ -597,40 +561,21 @@ const submitOrder = async () => {
       // 调用API创建订单
       const response = await orderApi.createOrder(orderData);
       
+      console.log('订单创建完整响应:', response);
+      
       if (response.data && response.data.code === 200) {
         // 获取订单号
         orderNo = response.data.data;
-        console.log('订单创建成功，订单号:', orderNo);
-        
-        // 确保订单号不为null或undefined
-        if (!orderNo) {
-          ElMessage.warning('订单创建成功，但未获取到订单号，请前往订单列表查看');
-          router.push('/orders/user');
-          return;
-        }
+        console.log('订单创建成功，订单号类型:', typeof orderNo, '值:', orderNo);
         
         // 清除本地存储的订单预览
         localStorage.removeItem('orderPreview');
         
-        // 跳转到支付页面或订单详情页，添加延迟以确保后端处理完成
+        // 无论是否获取到订单号，都跳转到订单列表
         ElMessage.success('订单创建成功');
-        
-        // 添加延迟，给后端足够时间处理订单
         setTimeout(() => {
-          // 确保订单号是字符串，并且是有效值
-          const orderNoStr = String(orderNo || '').trim();
-          if (orderNoStr) {
-            console.log('正在跳转到订单详情页，订单号:', orderNoStr);
-            router.push({
-              path: `/order/${orderNoStr}`,
-              query: { action: 'pay' }
-            });
-          } else {
-            console.error('订单号无效:', orderNo);
-            ElMessage.warning('订单创建成功，但跳转失败，请前往订单列表查看');
-            router.push('/orders/user');
-          }
-        }, 800);
+          router.push('/orders/user');
+        }, 500);
       } else {
         ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
       }

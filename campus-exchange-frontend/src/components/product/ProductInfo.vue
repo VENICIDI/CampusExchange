@@ -65,7 +65,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed } from 'vue';
+import { computed } from 'vue';
 import { useRouter } from 'vue-router';
 
 const props = defineProps({
@@ -75,7 +75,7 @@ const props = defineProps({
   }
 });
 
-defineEmits(['add-to-cart', 'buy-now']);
+const emit = defineEmits(['add-to-cart', 'buy-now']);
 const router = useRouter();
 
 // 判断商品是否可购买

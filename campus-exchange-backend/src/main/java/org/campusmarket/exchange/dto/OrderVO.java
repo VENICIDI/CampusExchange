@@ -57,6 +57,11 @@ public class OrderVO {
     private BigDecimal actualPaymentAmount;
     
     /**
+     * 平台佣金金额
+     */
+    private BigDecimal platformCommissionAmount;
+    
+    /**
      * 订单状态
      */
     private OrderStatusEnum status;
@@ -65,6 +70,16 @@ public class OrderVO {
      * 交易方式
      */
     private TradeTypeEnum tradeType;
+    
+    /**
+     * 线下交易地点
+     */
+    private String offlineMeetingLocation;
+    
+    /**
+     * 线下交易时间
+     */
+    private LocalDateTime offlineMeetingTime;
     
     /**
      * 快递公司 (非数据库字段)
@@ -92,6 +107,11 @@ public class OrderVO {
      * 收货地址信息（非数据库字段，从用户表获取）
      */
     private OrderAddressVO orderAddress;
+    
+    /**
+     * 商家是否已评价买家
+     */
+    private Boolean buyerReviewed;
     
     /**
      * 订单项列表（只包含简要信息）

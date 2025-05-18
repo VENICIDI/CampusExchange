@@ -128,6 +128,18 @@ const router = createRouter({
       name: 'merchant-order-detail',
       component: MerchantOrderDetailView,
       meta: { requiresAuth: true, role: 1 }
+    },
+    {
+      path: '/order/review/:orderNo',
+      name: 'OrderReview',
+      component: () => import('@/views/OrderReviewView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/user/profile',
+      name: 'buyer-profile-edit',
+      component: () => import('@/views/BuyerProfileEditView.vue'),
+      meta: { requiresAuth: true }
     }
   ],
 })
@@ -135,6 +147,9 @@ const router = createRouter({
 // 路由守卫
 router.beforeEach((to, from, next) => {
   console.log('路由守卫触发，跳转到:', to.path, '从:', from.path);
+  
+  // 清除可能的错误状态和缓存
+  window.__VUE_ERROR_DETECTED = false;
   
   // 每次路由变更时重新从localStorage获取用户数据，确保状态最新
   const userJson = localStorage.getItem('user');
@@ -196,34 +211,36 @@ router.beforeEach((to, from, next) => {
       return;
     }
   }
-  
-  // 如果页面需要登录认证且用户未登录
-  if (to.matched.some(record => record.meta.requiresAuth) && !isLoggedIn) {
-    console.log('需要登录才能访问此页面，重定向到登录页');
-    next({ 
-      name: 'login',
-      query: { redirect: to.fullPath } // 保存原来要去的页面，便于登录后跳转回来
-    });
-    return;
-  } 
-  
-  // 如果页面是游客页面(登录/注册)且用户已登录
-  if (to.matched.some(record => record.meta.guest) && isLoggedIn) {
-    console.log('用户已登录，不能访问游客页面，根据角色重定向');
-    // 根据用户角色跳转到合适的页面
-    if (userRole === 'MERCHANT') {
-      next({ name: 'merchant-dashboard' });
-    } else if (userRole === 'ADMIN') {
-      // 如果有管理员页面可以跳转到管理员页面
-      next({ name: 'home' }); // 临时跳转到首页
-    } else {
-      next({ name: 'home' });
+
+  // 检查是否需要登录
+  if (to.matched.some(record => record.meta.requiresAuth)) {
+    if (!isLoggedIn) {
+      console.log('需要登录才能访问此页面，重定向到登录页');
+      next({
+        name: 'login',
+        query: { redirect: to.fullPath }
+      });
+      return;
     }
-    return;
-  } 
-  
-  // 正常导航
-  console.log('正常导航到:', to.path);
+  }
+
+  // guest 路由，已登录用户不应该访问
+  if (to.matched.some(record => record.meta.guest)) {
+    if (isLoggedIn) {
+      console.log('已登录用户不应访问游客页面，重定向到首页');
+      next({ name: 'home' });
+      return;
+    }
+  }
+
+  // 设置页面标题
+  if (to.meta.title) {
+    document.title = `${to.meta.title} - 校园二手物品交易平台`;
+  } else {
+    document.title = "校园二手物品交易平台";
+  }
+
+  // 对于所有其他情况，放行
   next();
 })
 

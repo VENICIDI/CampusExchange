@@ -18,8 +18,6 @@
 </template>
 
 <script setup>
-import { defineProps } from 'vue';
-
 defineProps({
   description: {
     type: String,

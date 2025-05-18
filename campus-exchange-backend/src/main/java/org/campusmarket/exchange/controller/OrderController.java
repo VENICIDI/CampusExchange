@@ -117,52 +117,19 @@ public class OrderController {
      */
     @GetMapping("/merchant-orders")
     public Result<Page<OrderVO>> getMerchantOrders(
-            @RequestParam(required = false) OrderStatusEnum status,
+            @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "1") Integer pageNum,
             @RequestParam(defaultValue = "10") Integer pageSize,
             HttpServletRequest request) {
-        System.out.println("======================");
-        System.out.println("请求路径: " + request.getRequestURI());
-        System.out.println("请求方法: " + request.getMethod());
-        System.out.println("请求来源: " + request.getRemoteAddr());
-        System.out.println("======================");
-        
-        // 打印所有请求头，用于调试
-        java.util.Enumeration<String> headerNames = request.getHeaderNames();
-        System.out.println("所有请求头信息:");
-        while (headerNames.hasMoreElements()) {
-            String headerName = headerNames.nextElement();
-            System.out.println(headerName + ": " + request.getHeader(headerName));
-        }
-        System.out.println("======================");
         
         UserDTO currentUser = UserContext.getCurrentUser();
-        System.out.println("UserContext.getCurrentUser() 结果: " + currentUser);
-        
         if (currentUser == null) {
-            System.out.println("当前用户为null，尝试从请求头中获取信息");
-            // 尝试重新从请求头获取信息
-            String userId = request.getHeader("X-User-Id");
-            String username = request.getHeader("X-User-Name");
-            String role = request.getHeader("X-User-Role");
-            System.out.println("请求头中的用户ID: " + userId);
-            System.out.println("请求头中的用户名: " + username);
-            System.out.println("请求头中的角色: " + role);
-            
             throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
         }
         
-        // 检查是否为商家 - 打印日志便于调试
-        System.out.println("当前用户信息: " + currentUser);
+        // 检查是否为商家
         Integer role = currentUser.getRole();
-        System.out.println("当前用户角色值(Integer类型): " + role);
-        System.out.println("当前用户角色值类型: " + (role != null ? role.getClass().getName() : "null"));
-        System.out.println("当前用户名: " + currentUser.getUsername());
-        System.out.println("MERCHANT枚举ordinal: " + RoleEnum.MERCHANT.ordinal());
-        
-        // 使用1作为商家角色的固定值，避免依赖ordinal()方法
         if (role == null || role != 1) {
-            System.out.println("用户角色不是商家，role: " + role);
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以查看商家订单");
         }
         
@@ -172,8 +139,18 @@ public class OrderController {
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "未找到商家信息");
         }
         
+        // 将字符串status转换为枚举类型(如果status为空则传递null)
+        OrderStatusEnum statusEnum = null;
+        if (status != null && !status.isEmpty() && !"null".equalsIgnoreCase(status) && !"undefined".equalsIgnoreCase(status)) {
+            try {
+                statusEnum = OrderStatusEnum.valueOf(status);
+            } catch (IllegalArgumentException e) {
+                throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "无效的订单状态: " + status);
+            }
+        }
+        
         Long merchantId = merchant.getId();
-        Page<OrderVO> orders = orderService.getMerchantOrders(merchantId, status, pageNum, pageSize);
+        Page<OrderVO> orders = orderService.getMerchantOrders(merchantId, statusEnum, pageNum, pageSize);
         return Result.success(orders);
     }
     
@@ -292,11 +269,8 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        System.out.println("处理退款申请 - 当前用户角色: " + role + ", 用户名: " + currentUser.getUsername());
-        
-        // 使用固定值1判断是否为商家
-        if (role == null || role != 1) {
-            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以处理退款申请");
+        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以处理退货");
         }
         
         // 根据用户ID获取商家ID
@@ -305,9 +279,37 @@ public class OrderController {
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "未找到商家信息");
         }
         
-        Long merchantId = merchant.getId();
-        boolean processed = orderService.processReturnRequest(merchantId, orderNo, approve, remark);
+        boolean processed = orderService.processReturnRequest(merchant.getId(), orderNo, approve, remark);
         return Result.success(processed);
+    }
+    
+    /**
+     * 获取商家订单状态统计
+     * @return 各状态订单数量
+     */
+    @GetMapping("/status-counts")
+    public Result<java.util.Map<String, Integer>> getOrderStatusCounts() {
+        UserDTO currentUser = UserContext.getCurrentUser();
+        if (currentUser == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
+        }
+        
+        // 检查是否为商家
+        Integer role = currentUser.getRole();
+        if (role == null || role != 1) {
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以查看订单统计");
+        }
+        
+        // 根据用户ID获取商家ID
+        Merchant merchant = merchantService.getMerchantByUserId(currentUser.getId());
+        if (merchant == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "未找到商家信息");
+        }
+        
+        // 调用服务层方法获取订单状态统计
+        java.util.Map<String, Integer> counts = orderService.getMerchantOrderStatusCounts(merchant.getId());
+        
+        return Result.success(counts);
     }
     
     /**

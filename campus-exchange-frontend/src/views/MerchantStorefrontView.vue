@@ -76,14 +76,58 @@
       </div>
       
       <!-- 查看更多商品按钮 -->
-      <div class="view-more" v-if="merchantProfile && merchantProfile.products && merchantProfile.products.length > 0">
-        <el-button type="text" @click="viewAllProducts">查看全部商品</el-button>
+      <div class="view-all-products" v-if="merchantProfile && merchantProfile.products && merchantProfile.products.length >= 4">
+        <el-button type="link" @click="viewAllProducts">查看全部商品</el-button>
       </div>
     </div>
 
     <!-- 店铺评价 -->
     <div class="merchant-reviews-section">
       <h2>买家评价</h2>
+      
+      <!-- 商家评价统计 -->
+      <div v-if="!isLoading.reviews && merchantProfile && merchantProfile.reviews && merchantProfile.reviews.length > 0" class="merchant-rating-stats">
+        <div class="merchant-avg-rating">
+          <div class="merchant-rating-score">{{ merchantAvgRating.toFixed(1) }}</div>
+          <div class="merchant-rating-stars">
+            <el-rate 
+              :model-value="merchantAvgRating" 
+              disabled 
+              show-score 
+              text-color="#ff9900">
+            </el-rate>
+          </div>
+          <div class="merchant-positive-rate">好评率 {{ merchantProfile.storePositiveRate ? (merchantProfile.storePositiveRate * 100).toFixed(1) : '100' }}%</div>
+        </div>
+        
+        <div class="merchant-rating-breakdown">
+          <div class="rating-dimension">
+            <span class="dimension-name">服务态度</span>
+            <div class="dimension-value">
+              <span class="dimension-score">{{ serviceAttitudeAvg.toFixed(1) }}</span>
+              <el-rate 
+                :model-value="serviceAttitudeAvg" 
+                disabled
+                :colors="['#FFECB3', '#FFD54F', '#FFC107']"
+                :score-template="'{value}'">
+              </el-rate>
+            </div>
+          </div>
+          <div class="rating-dimension">
+            <span class="dimension-name">描述相符</span>
+            <div class="dimension-value">
+              <span class="dimension-score">{{ merchantAvgRating.toFixed(1) }}</span>
+              <el-rate 
+                :model-value="merchantAvgRating" 
+                disabled
+                :colors="['#FFECB3', '#FFD54F', '#FFC107']"
+                :score-template="'{value}'">
+              </el-rate>
+            </div>
+          </div>
+        </div>
+      </div>
+      
       <div v-if="isLoading.reviews" class="loading">
         <el-skeleton :rows="3" animated />
       </div>
@@ -96,7 +140,7 @@
           <div class="review-header">
             <div class="reviewer-info">
               <div class="reviewer-avatar">👤</div>
-              <span class="reviewer-name">{{ review.username || '匿名用户' }}</span>
+              <span class="reviewer-name">{{ formatUsername(review.username) || '匿名用户' }}</span>
             </div>
             <div class="review-rating">
               <el-rate
@@ -108,6 +152,17 @@
           </div>
           <div class="review-content">{{ review.content || '该用户没有填写评价内容' }}</div>
           <div class="review-time">{{ formatDate(review.createTime) }}</div>
+        </div>
+        
+        <!-- 分页器 -->
+        <div class="reviews-pagination" v-if="merchantProfile.reviews.length > 5">
+          <el-pagination
+            background
+            layout="prev, pager, next"
+            :total="merchantProfile.reviews.length"
+            :page-size="5"
+            @current-change="handlePageChange">
+          </el-pagination>
         </div>
       </div>
     </div>
@@ -246,6 +301,43 @@ const formatCondition = (condition) => {
   };
   
   return conditionMap[condition] || condition;
+};
+
+// 获取商家平均评分
+const merchantAvgRating = computed(() => {
+  if (!merchantProfile.value || !merchantProfile.value.reviews || merchantProfile.value.reviews.length === 0) {
+    return 5.0; // 默认5分
+  }
+  
+  const sum = merchantProfile.value.reviews.reduce((total, review) => total + review.serviceAttitudeRating, 0);
+  return sum / merchantProfile.value.reviews.length;
+});
+
+// 获取服务态度平均分
+const serviceAttitudeAvg = computed(() => {
+  if (!merchantProfile.value || !merchantProfile.value.reviews || merchantProfile.value.reviews.length === 0) {
+    return 5.0; // 默认5分
+  }
+  
+  const sum = merchantProfile.value.reviews.reduce((total, review) => total + review.serviceAttitudeRating, 0);
+  return sum / merchantProfile.value.reviews.length;
+});
+
+// 格式化用户名（保护隐私）
+const formatUsername = (username) => {
+  if (!username) return '';
+  
+  if (username.length <= 2) {
+    return username.substring(0, 1) + '*';
+  } else {
+    return username.substring(0, 1) + '*'.repeat(username.length - 2) + username.substring(username.length - 1);
+  }
+};
+
+// 处理评价分页
+const handlePageChange = (page) => {
+  console.log('切换到评价页:', page);
+  // 暂未实现实际分页，仅显示UI
 };
 
 // 页面加载时获取数据
@@ -464,7 +556,7 @@ onMounted(async () => {
   gap: 20px;
 }
 
-.view-more {
+.view-all-products {
   text-align: center;
   margin-top: 20px;
 }
@@ -564,6 +656,77 @@ onMounted(async () => {
   text-align: center;
 }
 
+/* 商家评价区域增强样式 */
+.merchant-rating-stats {
+  display: flex;
+  justify-content: space-between;
+  background-color: #f9f9f9;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  gap: 30px;
+}
+
+.merchant-avg-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 140px;
+  padding-right: 20px;
+  border-right: 1px dashed #e0e0e0;
+}
+
+.merchant-rating-score {
+  font-size: 36px;
+  font-weight: 700;
+  color: #ff9900;
+  line-height: 1;
+  margin-bottom: 10px;
+}
+
+.merchant-positive-rate {
+  margin-top: 5px;
+  font-size: 14px;
+  color: #666;
+}
+
+.merchant-rating-breakdown {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.rating-dimension {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dimension-name {
+  font-size: 14px;
+  color: #666;
+  min-width: 70px;
+}
+
+.dimension-value {
+  display: flex;
+  align-items: center;
+}
+
+.dimension-score {
+  font-weight: 600;
+  color: #ff9900;
+  margin-right: 10px;
+}
+
+.reviews-pagination {
+  margin-top: 20px;
+  display: flex;
+  justify-content: center;
+}
+
 @media (max-width: 768px) {
   .merchant-header {
     flex-direction: column;
@@ -581,6 +744,20 @@ onMounted(async () => {
   
   .product-grid {
     grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  }
+  
+  .merchant-rating-stats {
+    flex-direction: column;
+    padding: 15px;
+  }
+  
+  .merchant-avg-rating {
+    border-right: none;
+    border-bottom: 1px dashed #e0e0e0;
+    padding-right: 0;
+    padding-bottom: 15px;
+    margin-bottom: 15px;
+    width: 100%;
   }
 }
 </style> 

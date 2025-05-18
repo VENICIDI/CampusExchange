@@ -1,13 +1,28 @@
 // 文件路径: E:\soft_ware\idea_projects\CampusExchange\campus-exchange-backend\src\main\java\org\campusmarket\exchange\enums\GenderEnum.java
 package org.campusmarket.exchange.enums;
 
-// 性别枚举
+import com.baomidou.mybatisplus.annotation.EnumValue;
+import com.fasterxml.jackson.annotation.JsonValue;
+import lombok.Getter;
+
+/**
+ * 性别枚举
+ */
+@Getter
 public enum GenderEnum {
-    // 女性
-    FEMALE,
-    // 男性
-    MALE,
-    // 未知
-    UNKNOWN
-    // 注意：数据库设计中允许 NULL，也可以加一个 UNKNOWN 状态
+    
+    FEMALE("FEMALE", "女性"),
+    MALE("MALE", "男性"),
+    UNKNOWN("UNKNOWN", "未知");
+    
+    @EnumValue
+    @JsonValue
+    private final String code;
+    
+    private final String desc;
+    
+    GenderEnum(String code, String desc) {
+        this.code = code;
+        this.desc = desc;
+    }
 }

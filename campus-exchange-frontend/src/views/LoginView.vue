@@ -303,11 +303,19 @@ const handleLogin = async () => {
         userId: responseData.userId,
         username: responseData.username || '用户',
         role: responseData.role || 'USER',
-        avatar: responseData.avatar || ''
+        avatar: responseData.avatar || '',
+        // 如果服务器返回了merchantId，也保存到userData中
+        merchantId: responseData.merchantId || null
       };
       
       console.log('保存用户数据到本地存储:', userData);
       localStorage.setItem('user', JSON.stringify(userData));
+      
+      // 如果是商家角色，并且接口返回了merchantId，则单独保存merchantId
+      if (responseData.role === 'MERCHANT' && responseData.merchantId) {
+        console.log('将商家ID保存到localStorage:', responseData.merchantId);
+        localStorage.setItem('merchantId', responseData.merchantId.toString());
+      }
       
       // 触发用户登录事件，通知App.vue更新用户状态
       window.dispatchEvent(new Event('user-login'));

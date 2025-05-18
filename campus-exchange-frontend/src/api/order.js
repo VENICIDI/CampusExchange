@@ -1,4 +1,5 @@
 import api from './index';
+import request from '@/utils/request';
 
 // 订单相关接口
 export const orderApi = {
@@ -14,6 +15,9 @@ export const orderApi = {
   // 获取商家订单列表
   getMerchantOrders: (params) => api.get('/orders/merchant-orders', { params }),
   
+  // 获取订单状态统计
+  getOrderStatusCounts: () => api.get('/orders/status-counts'),
+  
   // 获取订单详情
   getOrderDetail: (orderNo) => api.get(`/orders/${orderNo}`),
   
@@ -27,7 +31,15 @@ export const orderApi = {
   payOrder: (orderNo) => api.post(`/orders/${orderNo}/pay`),
   
   // 商家发货
-  shipOrder: (orderNo) => api.post(`/orders/${orderNo}/ship`),
+  shipOrder: (params) => {
+    if (typeof params === 'string') {
+      // 兼容直接传入订单号的调用方式
+      return api.post(`/orders/${params}/ship`);
+    } else {
+      // 处理传入对象的情况
+      return api.post(`/orders/${params.orderNo}/ship`);
+    }
+  },
   
   // 申请退货/退款
   requestReturn: (orderNo, reason) => api.post(
@@ -37,11 +49,26 @@ export const orderApi = {
   ),
   
   // 商家处理退货/退款申请
-  processReturnRequest: (orderNo, approve, remark) => api.post(
-    `/orders/${orderNo}/return/process`,
-    null,
-    { params: { approve, remark } }
-  ),
+  processReturnRequest: (params, approve, remark) => {
+    if (typeof params === 'string') {
+      // 兼容直接传入订单号的调用方式
+      return api.post(
+        `/orders/${params}/return/process`,
+        null,
+        { params: { approve, remark } }
+      );
+    } else {
+      // 处理传入对象的情况
+      return api.post(
+        `/orders/${params.orderNo}/return/process`,
+        null,
+        { params: { approve: params.approve, remark: params.remark } }
+      );
+    }
+  },
+  
+  // 获取用户待评价订单
+  getUnreviewedOrders: () => api.get('/reviews/unreviewedOrders'),
   
   // 订单状态文本映射
   orderStatusText: {

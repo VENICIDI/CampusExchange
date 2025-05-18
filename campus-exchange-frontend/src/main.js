@@ -60,4 +60,34 @@ app.use(createPinia())
 app.use(router)
 app.use(ElementPlus) // 使用ElementPlus
 
+// 全局错误处理
+app.config.errorHandler = (err, instance, info) => {
+  console.error('Vue应用错误:', err);
+  console.error('错误信息:', info);
+  console.error('发生错误的组件:', instance);
+
+  // 标记错误状态，可以用于自动刷新或重试逻辑
+  window.__VUE_ERROR_DETECTED = true;
+  window.__LAST_ERROR = err;
+
+  // 如果多次跳转后出现白屏，可以尝试返回首页
+  if (window.location.pathname !== '/' && 
+      window.__ERROR_COUNT === undefined) {
+    window.__ERROR_COUNT = 1;
+  } else if (window.__ERROR_COUNT !== undefined) {
+    window.__ERROR_COUNT++;
+    
+    // 如果错误累积超过一定次数，可以考虑重新加载页面或导航回首页
+    if (window.__ERROR_COUNT > 2) {
+      console.log('检测到多次错误，尝试重新导航到首页...');
+      window.__ERROR_COUNT = 0;
+      
+      // 使用setTimeout避免无限循环
+      setTimeout(() => {
+        window.location.href = '/';
+      }, 100);
+    }
+  }
+};
+
 app.mount('#app') 

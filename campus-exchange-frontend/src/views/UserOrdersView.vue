@@ -13,6 +13,16 @@
             @click="filterByStatus(status)"
           >
             {{ label }}
+            <span v-if="getStatusCount(status) > 0" class="badge bg-danger ms-1">{{ getStatusCount(status) }}</span>
+          </button>
+          
+          <!-- 待评价选项 -->
+          <button 
+            :class="['btn filter-btn', showUnreviewed ? 'btn-primary' : 'btn-outline-primary']"
+            @click="filterUnreviewed"
+          >
+            待评价
+            <span v-if="unreviewedCount > 0" class="badge bg-danger ms-1">{{ unreviewedCount }}</span>
           </button>
         </div>
       </div>
@@ -40,10 +50,10 @@
         <div v-for="order in orders" :key="order.id" class="order-card mb-4 bg-white rounded shadow-sm" @click="goToOrderDetail(order.orderNo)">
           <div class="order-header d-flex justify-content-between align-items-center p-3 border-bottom">
             <div class="order-info">
-              <span class="order-number">订单号: {{ order.orderNo }}</span>
-              <span class="order-date ms-3">下单时间: {{ formatDate(order.createTime) }}</span>
-              <span v-if="order.merchantName" class="merchant-name ms-3">
-                店铺: {{ order.merchantName }}
+              <span class="order-number">订单号：{{ order.orderNo }}&nbsp;&nbsp;</span>
+              <span class="order-date ms-5">下单时间：{{ formatDate(order.createTime) }}&nbsp;&nbsp;</span>
+              <span v-if="order.merchantName" class="merchant-name ms-5">
+                店铺：{{ order.merchantName }}
               </span>
             </div>
             <div class="order-status">
@@ -55,27 +65,27 @@
           
           <div class="order-body">
             <div class="table-responsive">
-              <table class="table table-hover mb-0">
+              <table class="table table-hover mb-0 text-center">
                 <thead class="table-light">
                   <tr>
                     <th style="width: 12%">商品图片</th>
                     <th style="width: 40%">商品名称</th>
-                    <th style="width: 12%" class="text-center">单价</th>
-                    <th style="width: 10%" class="text-center">数量</th>
-                    <th style="width: 16%" class="text-center">小计</th>
-                    <th style="width: 10%" class="text-center">操作</th>
+                    <th style="width: 12%">单价</th>
+                    <th style="width: 10%">数量</th>
+                    <th style="width: 16%">小计</th>
+                    <th style="width: 10%">操作</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="item in order.orderItems" :key="item.id">
-                    <td class="text-center">
+                    <td class="text-center align-middle">
                       <img :src="item.productImage || 'https://via.placeholder.com/60/e0e0e0/666666?text=商品'" 
                            :alt="item.productName" 
                            class="product-img">
                     </td>
-                    <td>
+                    <td class="text-center align-middle">
                       <div class="product-name">{{ item.productName }}</div>
-                <div class="item-specs text-muted small">{{ item.specifications || '无规格信息' }}</div>
+                      <div class="item-specs text-muted small">{{ item.specifications || '无规格信息' }}</div>
                     </td>
                     <td class="text-center align-middle">¥{{ item.price }}</td>
                     <td class="text-center align-middle">{{ item.quantity }}</td>
@@ -138,17 +148,29 @@ const currentPage = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
 const currentStatus = ref(null);
+const showUnreviewed = ref(false);
+const unreviewedCount = ref(0);
 
-// 订单状态选项
-const statusOptions = {
-  null: '全部订单',
-  'PENDING_PAYMENT': '待付款',
-  'PENDING_SHIPMENT': '待发货',
-  'SHIPPED': '已发货',
-  'RECEIVED': '已收货',
-  'COMPLETED': '已完成',
-  'CANCELLED': '已取消'
-};
+  // 订单状态选项
+  const statusOptions = {
+    null: '全部订单',
+    'PENDING_PAYMENT': '待付款',
+    'PENDING_SHIPMENT': '待发货',
+    'SHIPPED': '已发货',
+    'RECEIVED': '已收货',
+    'COMPLETED': '已完成',
+    'CANCELLED': '已取消'
+  };
+  
+    // 存储各状态的订单数量
+const statusCounts = ref({
+  'PENDING_PAYMENT': 0,
+  'PENDING_SHIPMENT': 0,
+  'SHIPPED': 0,
+  'RECEIVED': 0,
+  'COMPLETED': 0,
+  'CANCELLED': 0
+});
 
 // 计算总页数
 const totalPages = computed(() => {
@@ -210,7 +232,7 @@ const fetchOrders = async () => {
 
 // 格式化日期
 const formatDate = (dateString) => {
-  if (!dateString) return '未知时间';
+  if (!dateString) return '';
   const date = new Date(dateString);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 };
@@ -242,10 +264,86 @@ const getTotalItemCount = (order) => {
 
 // 按状态筛选
 const filterByStatus = (status) => {
-  if (status === 'null') status = null;
-  currentStatus.value = status;
-  currentPage.value = 1; // 重置为第一页
+  // 如果是'null'或者'all'，将其转为null，确保后端接收到的是null而不是字符串
+  currentStatus.value = (status === 'null' || status === null || status === 'all') ? null : status;
+  showUnreviewed.value = false; // 退出待评价状态
+  currentPage.value = 1;
   fetchOrders();
+};
+
+// 筛选未评价订单
+const filterUnreviewed = async () => {
+  showUnreviewed.value = !showUnreviewed.value;
+  if (showUnreviewed.value) {
+    // 如果进入待评价状态，清除当前状态选择
+    currentStatus.value = null;
+    currentPage.value = 1;
+    await fetchUnreviewedOrders();
+  } else {
+    // 如果退出待评价状态，恢复默认全部订单
+    currentStatus.value = null;
+    currentPage.value = 1;
+    fetchOrders();
+  }
+};
+
+// 获取未评价订单
+const fetchUnreviewedOrders = async () => {
+  loading.value = true;
+  try {
+    const response = await orderApi.getUnreviewedOrders();
+    if (response.data && response.data.code === 200) {
+      const unreviewedOrderNos = response.data.data || [];
+      unreviewedCount.value = unreviewedOrderNos.length;
+      
+      if (unreviewedOrderNos.length === 0) {
+        orders.value = [];
+        total.value = 0;
+        loading.value = false;
+        return;
+      }
+      
+      // 获取未评价订单的详情
+      const unreviewedOrders = [];
+      for (const orderNo of unreviewedOrderNos) {
+        try {
+          const orderResponse = await orderApi.getOrderDetail(orderNo);
+          if (orderResponse.data && orderResponse.data.code === 200) {
+            const orderDetail = orderResponse.data.data;
+            
+            // 处理订单项，确保有必要的信息
+            if (orderDetail.orderItems) {
+              orderDetail.orderItems = orderDetail.orderItems.map(item => {
+                return {
+                  id: item.id,
+                  productId: item.productId,
+                  productName: item.productNameSnapshot || '未知商品',
+                  productImage: item.productImageSnapshot,
+                  price: item.priceAtPurchase || 0,
+                  quantity: item.quantity || 1,
+                  specifications: ''
+                };
+              });
+            }
+            
+            unreviewedOrders.push(orderDetail);
+          }
+        } catch (error) {
+          console.error('获取订单详情失败:', error);
+        }
+      }
+      
+      orders.value = unreviewedOrders;
+      total.value = unreviewedOrders.length;
+    } else {
+      ElMessage.error('获取未评价订单失败');
+    }
+  } catch (error) {
+    console.error('获取未评价订单出错:', error);
+    ElMessage.error('获取未评价订单出错');
+  } finally {
+    loading.value = false;
+  }
 };
 
 // 跳转到指定页
@@ -261,20 +359,33 @@ const cancelOrder = async (orderNo) => {
     await ElMessageBox.confirm('确定要取消这个订单吗？', '取消订单', {
       confirmButtonText: '确定',
       cancelButtonText: '取消',
-      type: 'warning'
+      type: 'warning',
+      duration: 2000 // 减少显示时间
     });
     
     const response = await orderApi.cancelOrder(orderNo);
     if (response.data && response.data.code === 200) {
-      ElMessage.success('订单已取消');
+      ElMessage({
+        message: '订单已取消',
+        type: 'success',
+        duration: 2000 // 减少显示时间
+      });
       fetchOrders(); // 刷新订单列表
     } else {
-      ElMessage.error('取消订单失败：' + (response.data?.message || '未知错误'));
+      ElMessage({
+        message: '取消订单失败：' + (response.data?.message || '未知错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   } catch (error) {
     if (error !== 'cancel') { // 不是用户取消操作
       console.error('取消订单出错：', error);
-      ElMessage.error('取消订单失败：' + (error.message || '网络错误'));
+      ElMessage({
+        message: '取消订单失败：' + (error.message || '网络错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   }
 };
@@ -285,20 +396,33 @@ const payOrder = async (orderNo) => {
     await ElMessageBox.confirm('确定要支付这个订单吗？', '订单支付', {
       confirmButtonText: '确定支付',
       cancelButtonText: '取消',
-      type: 'info'
+      type: 'info',
+      duration: 2000 // 减少显示时间
     });
     
     const response = await orderApi.payOrder(orderNo);
     if (response.data && response.data.code === 200) {
-      ElMessage.success('订单支付成功');
+      ElMessage({
+        message: '订单支付成功',
+        type: 'success',
+        duration: 2000 // 减少显示时间
+      });
       fetchOrders(); // 刷新订单列表
     } else {
-      ElMessage.error('订单支付失败：' + (response.data?.message || '未知错误'));
+      ElMessage({
+        message: '订单支付失败：' + (response.data?.message || '未知错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   } catch (error) {
     if (error !== 'cancel') { // 不是用户取消操作
       console.error('支付订单出错：', error);
-      ElMessage.error('支付订单失败：' + (error.message || '网络错误'));
+      ElMessage({
+        message: '支付订单失败：' + (error.message || '网络错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   }
 };
@@ -309,20 +433,33 @@ const confirmReceipt = async (orderNo) => {
     await ElMessageBox.confirm('确认已收到商品？', '确认收货', {
       confirmButtonText: '确认收货',
       cancelButtonText: '取消',
-      type: 'info'
+      type: 'info',
+      duration: 2000 // 减少显示时间
     });
     
     const response = await orderApi.confirmReceipt(orderNo);
     if (response.data && response.data.code === 200) {
-      ElMessage.success('已确认收货');
+      ElMessage({
+        message: '已确认收货',
+        type: 'success',
+        duration: 2000 // 减少显示时间
+      });
       fetchOrders(); // 刷新订单列表
     } else {
-      ElMessage.error('确认收货失败：' + (response.data?.message || '未知错误'));
+      ElMessage({
+        message: '确认收货失败：' + (response.data?.message || '未知错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   } catch (error) {
     if (error !== 'cancel') { // 不是用户取消操作
       console.error('确认收货出错：', error);
-      ElMessage.error('确认收货失败：' + (error.message || '网络错误'));
+      ElMessage({
+        message: '确认收货失败：' + (error.message || '网络错误'),
+        type: 'error',
+        duration: 2000 // 减少显示时间
+      });
     }
   }
 };
@@ -332,9 +469,76 @@ const goToOrderDetail = (orderNo) => {
   router.push(`/order/${orderNo}`);
 };
 
-// 页面加载时获取数据
-onMounted(() => {
-  fetchOrders();
+// 获取未评价订单数量
+const fetchUnreviewedCount = async () => {
+  try {
+    const response = await orderApi.getUnreviewedOrders();
+    if (response.data && response.data.code === 200) {
+      unreviewedCount.value = response.data.data ? response.data.data.length : 0;
+    }
+  } catch (error) {
+    console.error('获取未评价订单数量出错:', error);
+  }
+};
+
+// 获取指定状态的订单数量
+const getStatusCount = (status) => {
+  // 全部订单显示所有状态订单数量的总和
+  if (status === 'null') {
+    // 计算所有状态订单的总和
+    return Object.values(statusCounts.value).reduce((sum, count) => sum + count, 0);
+  }
+  
+  // 返回状态计数
+  return statusCounts.value[status] || 0;
+};
+
+// 获取各状态订单数量
+const fetchStatusCounts = async () => {
+  try {
+    // 获取所有订单并手动计算各状态数量
+    const allOrdersResponse = await orderApi.getUserOrders({
+      pageNum: 1,
+      pageSize: 100, // 获取足够多的订单以计算数量
+      status: null    // 获取所有状态的订单
+    });
+    
+    if (allOrdersResponse.data && allOrdersResponse.data.code === 200) {
+      const allOrders = allOrdersResponse.data.data.records || [];
+      
+      // 统计各状态订单数量
+      const tempCounts = {
+        'PENDING_PAYMENT': 0,
+        'PENDING_SHIPMENT': 0,
+        'SHIPPED': 0,
+        'RECEIVED': 0,
+        'COMPLETED': 0,
+        'CANCELLED': 0
+      };
+      
+      allOrders.forEach(order => {
+        if (tempCounts[order.status] !== undefined) {
+          tempCounts[order.status]++;
+        }
+      });
+      
+      // 更新状态计数
+      statusCounts.value = tempCounts;
+      
+      console.log('各状态订单数量:', tempCounts);
+      const totalCount = Object.values(tempCounts).reduce((sum, count) => sum + count, 0);
+      console.log('订单总数 (各状态总和):', totalCount);
+    }
+  } catch (error) {
+    console.error('获取订单状态数量出错:', error);
+  }
+};
+
+// 页面加载
+onMounted(async () => {
+  await fetchOrders();
+  await fetchUnreviewedCount();
+  await fetchStatusCounts(); // 获取各状态订单数量
 });
 </script>
 
@@ -432,6 +636,7 @@ onMounted(() => {
 .table {
   margin-bottom: 0;
   width: 100%;
+  text-align: center !important;
 }
 
 .table th {
@@ -439,12 +644,18 @@ onMounted(() => {
   color: #444;
   background-color: #f5f5f5;
   padding: 12px 16px;
+  text-align: center !important;
 }
 
 .table td {
   vertical-align: middle;
   padding: 16px;
   border-bottom: 1px solid #f0f0f0;
+  text-align: center !important;
+}
+
+.table tr {
+  text-align: center !important;
 }
 
 .product-img {
@@ -460,11 +671,15 @@ onMounted(() => {
   font-weight: 500;
   margin-bottom: 6px;
   color: #333;
+  text-align: center !important;
+  width: 100%;
 }
 
 .item-specs {
   color: #999;
   font-size: 0.8rem;
+  text-align: center !important;
+  width: 100%;
 }
 
 .badge {

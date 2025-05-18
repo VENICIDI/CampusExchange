@@ -63,6 +63,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Resource
     private ICartService cartService;
 
+    @Resource
+    private MerchantLevelMapper merchantLevelMapper;
+
+    @Resource
+    private BuyerReviewByMerchantMapper buyerReviewByMerchantMapper;
+
     /**
      * 创建订单
      */
@@ -90,8 +96,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         BigDecimal totalProductAmount = BigDecimal.ZERO;
         List<OrderItem> orderItems = new ArrayList<>();
         
-        // 7. 计算平台佣金率 (假设为订单金额的5%)
-        BigDecimal platformCommissionRate = new BigDecimal("0.05");
+        // 7. 计算平台佣金率 (根据商家等级获取)
+        // 查询商家等级和对应的佣金率
+        BigDecimal platformCommissionRate;
+        if (merchant != null && merchant.getLevelId() != null) {
+            // 获取商家等级对应的佣金率
+            LambdaQueryWrapper<MerchantLevel> levelQuery = Wrappers.<MerchantLevel>lambdaQuery()
+                    .eq(MerchantLevel::getId, merchant.getLevelId());
+            MerchantLevel level = merchantLevelMapper.selectOne(levelQuery);
+            if (level != null && level.getCommissionRate() != null) {
+                platformCommissionRate = level.getCommissionRate();
+                log.info("使用商家等级[{}]对应的佣金率: {}", level.getLevelName(), platformCommissionRate);
+            } else {
+                // 使用默认佣金率
+                platformCommissionRate = new BigDecimal("0.01"); // 默认1%
+                log.info("未找到商家等级，使用默认佣金率: {}", platformCommissionRate);
+            }
+        } else {
+            // 使用默认佣金率
+            platformCommissionRate = new BigDecimal("0.01"); // 默认1%
+            log.info("商家信息不完整，使用默认佣金率: {}", platformCommissionRate);
+        }
         
         for (OrderCreateDTO.OrderItemDTO itemDTO : orderDTO.getItems()) {
             // 查询商品
@@ -452,8 +477,27 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
             order.setActualPaymentAmount(actualPaymentAmount);
             
-            // 设置平台手续费 (假设为商品总金额的5%)
-            BigDecimal platformCommissionRate = new BigDecimal("0.05");
+            // 设置平台手续费 (根据商家等级获取)
+            Merchant merchant = merchantMapper.selectById(merchantId);
+            BigDecimal platformCommissionRate;
+            if (merchant != null && merchant.getLevelId() != null) {
+                // 获取商家等级对应的佣金率
+                LambdaQueryWrapper<MerchantLevel> levelQuery = Wrappers.<MerchantLevel>lambdaQuery()
+                        .eq(MerchantLevel::getId, merchant.getLevelId());
+                MerchantLevel level = merchantLevelMapper.selectOne(levelQuery);
+                if (level != null && level.getCommissionRate() != null) {
+                    platformCommissionRate = level.getCommissionRate();
+                    log.info("使用商家等级[{}]对应的佣金率: {}", level.getLevelName(), platformCommissionRate);
+                } else {
+                    // 使用默认佣金率
+                    platformCommissionRate = new BigDecimal("0.01"); // 默认1%
+                    log.info("未找到商家等级，使用默认佣金率: {}", platformCommissionRate);
+                }
+            } else {
+                // 使用默认佣金率
+                platformCommissionRate = new BigDecimal("0.01"); // 默认1%
+                log.info("商家信息不完整，使用默认佣金率: {}", platformCommissionRate);
+            }
             BigDecimal platformCommissionAmount = totalProductAmount.multiply(platformCommissionRate);
             order.setPlatformCommissionAmount(platformCommissionAmount);
             
@@ -671,33 +715,100 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean cancelOrder(Long userId, String orderNo) {
-        log.info("用户[{}]取消订单: {}", userId, orderNo);
+        log.info("用户[{}]尝试取消订单[{}]", userId, orderNo);
         
-        // 1. 查询订单
-        LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
-                .eq(Order::getOrderNo, orderNo)
-                .eq(Order::getUserId, userId);
-        Order order = orderMapper.selectOne(queryWrapper);
+        // 查询订单
+        LambdaQueryWrapper<Order> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(Order::getOrderNo, orderNo);
+        queryWrapper.eq(Order::getUserId, userId);
+        Order order = getOne(queryWrapper);
         
         if (order == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "订单不存在");
+            log.warn("订单不存在或不属于该用户");
+            return false;
         }
         
-        // 2. 校验订单状态
+        // 只有待付款状态的订单才能取消
         if (order.getStatus() != OrderStatusEnum.PENDING_PAYMENT) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
-                    "只能取消待付款订单，当前状态: " + order.getStatus().getDesc());
+            log.warn("订单状态不是待付款，无法取消");
+            return false;
         }
         
-        // 3. 更新订单状态
+        // 更新订单状态为已取消
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
         updateOrder.setStatus(OrderStatusEnum.CANCELLED);
         updateOrder.setUpdateTime(LocalDateTime.now());
+        updateById(updateOrder);
         
-        orderMapper.updateById(updateOrder);
+        // 恢复商品库存
+        // 查询订单商品
+        LambdaQueryWrapper<OrderItem> itemQueryWrapper = Wrappers.lambdaQuery();
+        itemQueryWrapper.eq(OrderItem::getOrderId, order.getId());
+        List<OrderItem> orderItems = orderItemMapper.selectList(itemQueryWrapper);
+        
+        for (OrderItem item : orderItems) {
+            productService.increaseStock(item.getProductId(), item.getQuantity());
+        }
         
         log.info("订单取消成功");
+        return true;
+    }
+    
+    /**
+     * 系统自动取消超时订单实现
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean systemCancelOrder(Long userId, String orderNo) {
+        log.info("系统自动取消超时订单[{}]", orderNo);
+        
+        // 查询订单
+        LambdaQueryWrapper<Order> queryWrapper = Wrappers.lambdaQuery();
+        queryWrapper.eq(Order::getOrderNo, orderNo);
+        queryWrapper.eq(Order::getUserId, userId);
+        Order order = getOne(queryWrapper);
+        
+        if (order == null) {
+            log.warn("订单不存在或不属于该用户");
+            return false;
+        }
+        
+        // 只有待付款状态的订单才能取消
+        if (order.getStatus() != OrderStatusEnum.PENDING_PAYMENT) {
+            log.warn("订单状态不是待付款，无法自动取消");
+            return false;
+        }
+        
+        // 检查是否已超过24小时
+        LocalDateTime createTime = order.getCreateTime();
+        LocalDateTime now = LocalDateTime.now();
+        if (createTime.plusHours(24).isAfter(now)) {
+            log.warn("订单创建时间不足24小时，不执行自动取消");
+            return false;
+        }
+        
+        // 更新订单状态为已取消 - 只更新状态和更新时间，不使用不存在的字段
+        Order updateOrder = new Order();
+        updateOrder.setId(order.getId());
+        updateOrder.setStatus(OrderStatusEnum.CANCELLED);
+        updateOrder.setUpdateTime(now);
+        updateById(updateOrder);
+        
+        // 记录日志，记录取消原因而不存入数据库
+        log.info("系统自动取消订单[{}]，原因：超过24小时未支付", orderNo);
+        
+        // 恢复商品库存
+        // 查询订单商品
+        LambdaQueryWrapper<OrderItem> itemQueryWrapper = Wrappers.lambdaQuery();
+        itemQueryWrapper.eq(OrderItem::getOrderId, order.getId());
+        List<OrderItem> orderItems = orderItemMapper.selectList(itemQueryWrapper);
+        
+        for (OrderItem item : orderItems) {
+            productService.increaseStock(item.getProductId(), item.getQuantity());
+        }
+        
+        log.info("系统自动取消订单成功");
         return true;
     }
 
@@ -762,12 +873,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     "只能确认已发货的订单，当前状态: " + order.getStatus().getDesc());
         }
         
-        // 3. 更新订单状态
+        // 3. 更新订单状态为已收货，而不是直接完成，等待评价
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
-        updateOrder.setStatus(OrderStatusEnum.COMPLETED);
+        updateOrder.setStatus(OrderStatusEnum.RECEIVED);
         updateOrder.setReceiptConfirmationTime(LocalDateTime.now());
-        updateOrder.setCompletionTime(LocalDateTime.now());
+        // 不设置完成时间，完成时间应在评价后或超时后设置
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);
@@ -957,6 +1068,13 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             Merchant merchant = merchantMapper.selectById(order.getMerchantId());
             if (merchant != null) {
                 vo.setMerchantName(merchant.getStoreName());
+                
+                // 查询商家是否已评价买家
+                LambdaQueryWrapper<BuyerReviewByMerchant> reviewQuery = Wrappers.<BuyerReviewByMerchant>lambdaQuery()
+                        .eq(BuyerReviewByMerchant::getOrderId, order.getId())
+                        .eq(BuyerReviewByMerchant::getMerchantId, order.getMerchantId());
+                BuyerReviewByMerchant buyerReview = buyerReviewByMerchantMapper.selectOne(reviewQuery);
+                vo.setBuyerReviewed(buyerReview != null);
             }
         }
         
@@ -985,5 +1103,31 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         vo.setOrderItems(simpleItems);
         
         return vo;
+    }
+
+    /**
+     * 获取商家的订单状态计数
+     */
+    @Override
+    public java.util.Map<String, Integer> getMerchantOrderStatusCounts(Long merchantId) {
+        log.info("获取商家[{}]的订单状态计数", merchantId);
+        
+        // 初始化结果集
+        java.util.Map<String, Integer> result = new java.util.HashMap<>();
+        for (OrderStatusEnum status : OrderStatusEnum.values()) {
+            result.put(status.name(), 0);
+        }
+        
+        // 查询每种状态的订单数量
+        for (OrderStatusEnum status : OrderStatusEnum.values()) {
+            LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
+                    .eq(Order::getMerchantId, merchantId)
+                    .eq(Order::getStatus, status);
+            
+            long count = this.count(queryWrapper);
+            result.put(status.name(), (int) count);
+        }
+        
+        return result;
     }
 } 

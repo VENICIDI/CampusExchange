@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="org.campusmarket.exchange.mapper.ProductReviewMapper">
+    
+    <!-- 通用查询映射结果 -->
+    <resultMap id="BaseResultMap" type="org.campusmarket.exchange.entity.ProductReview">
+        <id column="id" property="id" />
+        <result column="order_item_id" property="orderItemId" />
+        <result column="user_id" property="userId" />
+        <result column="product_id" property="productId" />
+        <result column="merchant_id" property="merchantId" />
+        <result column="rating_score" property="ratingScore" />
+        <result column="content" property="content" />
+        <result column="create_time" property="createTime" />
+    </resultMap>
+    
+    <!-- 根据商品ID查询评价列表 -->
+    <select id="selectByProductId" resultMap="BaseResultMap">
+        SELECT * FROM product_review
+        WHERE product_id = #{productId}
+        ORDER BY create_time DESC
+        <if test="limit != null and limit > 0">
+            LIMIT #{limit}
+        </if>
+    </select>
+    
+    <!-- 查询商品的平均评分 -->
+    <select id="selectAvgRatingByProductId" resultType="java.lang.Double">
+        SELECT AVG(rating_score) FROM product_review
+        WHERE product_id = #{productId}
+    </select>
+    
+</mapper> 

@@ -3,6 +3,7 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { productApi } from '@/api/all'
 import ProductCard from '@/components/product/ProductCard.vue'
+import { cartApi } from '@/api/cart'
 
 // 判断用户是否登录
 const isLoggedIn = computed(() => {
@@ -26,11 +27,18 @@ const isMerchant = computed(() => {
 const categories = ref([])
 // 商品数据
 const products = ref([])
+// 购物车数据
+const cartItems = ref([])
 // 加载状态
 const isLoading = ref({
   categories: false,
-  products: false
+  products: false,
+  cart: false
 })
+// 分页相关
+const currentPage = ref(1)
+const pageSize = ref(8)
+const totalPages = ref(1)
 // 搜索相关
 const searchKeyword = ref('')
 const selectedCategory = ref(0)
@@ -69,12 +77,10 @@ const fetchCategories = async () => {
     if (response.data.code === 200) {
       categories.value = response.data.data
     } else {
-      console.error('获取分类失败:', response.data.message)
       // 使用模拟数据作为后备
       initializeMockCategories()
     }
   } catch (error) {
-    console.error('获取分类出错:', error)
     // 使用模拟数据作为后备
     initializeMockCategories()
   } finally {
@@ -86,14 +92,11 @@ const fetchCategories = async () => {
 const fetchProducts = async (params = {}) => {
   isLoading.value.products = true;
   try {
-    console.log('开始获取商品列表数据...');
     const response = await productApi.getProducts({
       pageNum: 1,
       pageSize: 8,
       ...params
     });
-    
-    console.log('商品列表API响应:', response);
     
     if (response.data && response.data.code === 200) {
       // 检查数据结构，适应不同的返回格式
@@ -102,21 +105,36 @@ const fetchProducts = async (params = {}) => {
       } else if (Array.isArray(response.data.data)) {
         products.value = response.data.data;
       } else {
-        console.warn('无法解析商品数据格式，使用模拟数据');
         initializeMockProducts();
       }
     } else {
-      console.error('获取商品列表失败:', response.data?.message || '未知错误');
       // 使用模拟数据作为后备
       initializeMockProducts();
     }
   } catch (error) {
-    console.error('获取商品出错:', error);
     // 使用模拟数据作为后备
     initializeMockProducts();
   } finally {
     isLoading.value.products = false;
-    console.log('最终加载的商品数据:', products.value);
+  }
+}
+
+// 获取购物车数据
+const fetchCartItems = async () => {
+  if (!isLoggedIn.value) return;
+  
+  isLoading.value.cart = true;
+  try {
+    const response = await cartApi.getCartItems();
+    if (response.data && response.data.code === 200) {
+      cartItems.value = response.data.data || [];
+    } else {
+      cartItems.value = [];
+    }
+  } catch (error) {
+    cartItems.value = [];
+  } finally {
+    isLoading.value.cart = false;
   }
 }
 
@@ -294,10 +312,13 @@ const navigateToStore = (merchantId) => {
   router.push(`/store/${merchantId}`);
 };
 
-// 页面加载完成后获取数据
+// 组件挂载时获取数据
 onMounted(() => {
   fetchCategories()
   fetchProducts()
+  if (isLoggedIn.value) {
+    fetchCartItems()
+  }
 })
 </script>
 
@@ -432,6 +453,22 @@ onMounted(() => {
             <div class="feature-icon">🤝</div>
             <h4>便捷交易</h4>
             <p>校内面对面交易，安全便捷无忧</p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 购物车提示 -->
+    <div class="cart-notice" v-if="isLoggedIn && cartItems && cartItems.length > 0">
+      <div class="notice-content">
+        <div class="notice-icon">🛒</div>
+        <div class="notice-text">
+          <h4>购物车</h4>
+          <div>
+            <p>您有 {{ cartItems.length }} 件商品在购物车中</p>
+            <router-link to="/cart">
+              <el-button type="link">去购物车</el-button>
+            </router-link>
           </div>
         </div>
       </div>
@@ -959,5 +996,38 @@ h3::after {
 
 .product-store {
   display: none; /* 隐藏多余的店铺链接 */
+}
+
+/* 购物车提示样式 */
+.cart-notice {
+  background-color: #f8faff;
+  border-radius: 10px;
+  padding: 15px;
+  margin: 20px auto;
+  max-width: 1140px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+  border-left: 4px solid #4a6ee0;
+}
+
+.notice-content {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+}
+
+.notice-icon {
+  font-size: 24px;
+}
+
+.notice-text h4 {
+  margin: 0 0 5px 0;
+  font-weight: 600;
+  color: #333;
+}
+
+.notice-text p {
+  margin: 0;
+  color: #555;
+  font-size: 14px;
 }
 </style>

@@ -71,12 +71,13 @@
           </div>
           
           <div class="form-group">
-            <label for="phone">手机号</label>
+            <label for="phone">手机号 <span class="required">*</span></label>
             <input
               type="text"
               id="phone"
               v-model="registerForm.phone"
               placeholder="请输入手机号"
+              required
             />
             <div class="error-message" v-if="errors.phone">{{ errors.phone }}</div>
           </div>
@@ -98,13 +99,15 @@
           <h3>附加信息</h3>
           
           <div class="form-group">
-            <label for="realName">真实姓名</label>
+            <label for="realName">真实姓名 <span class="required">*</span></label>
             <input
               type="text"
               id="realName"
               v-model="registerForm.realName"
               placeholder="请输入真实姓名"
+              required
             />
+            <div class="error-message" v-if="errors.realName">{{ errors.realName }}</div>
           </div>
           
           <div class="form-group">
@@ -115,6 +118,21 @@
               v-model="registerForm.city"
               placeholder="请输入所在城市"
             />
+          </div>
+          
+          <div class="form-group">
+            <label for="bankAccount">银行账号<span class="required">*</span></label>
+            <input
+              type="text"
+              id="bankAccount"
+              v-model="registerForm.bankAccount"
+              placeholder="请输入16位银行账号"
+              required
+              maxlength="16"
+              pattern="[0-9]{16}"
+              title="请输入16位数字银行账号"
+            />
+            <div class="error-message" v-if="errors.bankAccount">{{ errors.bankAccount }}</div>
           </div>
           
           <div class="form-group">
@@ -291,6 +309,7 @@ const registerForm = ref({
   gender: '',
   personalIntro: '',
   wechat: '',
+  bankAccount: '',
   isMerchant: false,
   shopName: '',
   shopIntro: '',
@@ -305,8 +324,10 @@ const errors = ref({
   username: '',
   password: '',
   confirmPassword: '',
+  realName: '',
   phone: '',
   email: '',
+  bankAccount: '',
   shopName: '',
   businessLicense: '',
   idCard: '',
@@ -541,8 +562,10 @@ const validateForm = () => {
     username: '',
     password: '',
     confirmPassword: '',
+    realName: '',
     phone: '',
     email: '',
+    bankAccount: '',
     shopName: '',
     businessLicense: '',
     idCard: '',
@@ -568,8 +591,17 @@ const validateForm = () => {
     isValid = false;
   }
 
-  // 验证手机号(如果提供)
-  if (registerForm.value.phone && !validatePhone(registerForm.value.phone)) {
+  // 验证真实姓名
+  if (!registerForm.value.realName.trim()) {
+    errors.value.realName = '真实姓名不能为空';
+    isValid = false;
+  }
+
+  // 验证手机号
+  if (!registerForm.value.phone) {
+    errors.value.phone = '手机号不能为空';
+    isValid = false;
+  } else if (!validatePhone(registerForm.value.phone)) {
     errors.value.phone = '手机号格式不正确';
     isValid = false;
   }
@@ -577,6 +609,15 @@ const validateForm = () => {
   // 验证邮箱(如果提供)
   if (registerForm.value.email && !validateEmail(registerForm.value.email)) {
     errors.value.email = '邮箱格式不正确';
+    isValid = false;
+  }
+  
+  // 验证银行账号
+  if (!registerForm.value.bankAccount) {
+    errors.value.bankAccount = '银行账号不能为空';
+    isValid = false;
+  } else if (!validateBankAccount(registerForm.value.bankAccount)) {
+    errors.value.bankAccount = '银行账号必须是16位数字';
     isValid = false;
   }
 
@@ -607,6 +648,15 @@ const validateForm = () => {
   return isValid;
 };
 
+// 验证银行账号的辅助函数
+const validateBankAccount = (bankAccount) => {
+  // 如果没有填写，返回true (非必填项，除非是商家)
+  if (!bankAccount) return true;
+  
+  // 必须是16位数字
+  return /^\d{16}$/.test(bankAccount);
+};
+
 // 注册提交
 const handleRegister = async () => {
   if (!validateForm() || isSubmitting.value) {
@@ -635,6 +685,7 @@ const handleRegister = async () => {
       gender: registerForm.value.gender || null,
       personalIntro: registerForm.value.personalIntro || '',
       wechat: registerForm.value.wechat || '',
+      bankAccount: registerForm.value.bankAccount || '',
       
       // 商家相关信息
       isMerchant: registerForm.value.isMerchant === true,
@@ -669,6 +720,7 @@ const handleRegister = async () => {
       gender: '',
       personalIntro: '',
       wechat: '',
+      bankAccount: '',
       isMerchant: false,
       shopName: '',
       shopIntro: '',

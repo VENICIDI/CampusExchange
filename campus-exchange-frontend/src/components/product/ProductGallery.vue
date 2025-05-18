@@ -27,7 +27,7 @@
 </template>
 
 <script setup>
-import { defineProps, defineEmits, computed, ref } from 'vue';
+import { computed, ref } from 'vue';
 import { fileApi } from '@/api/all';
 
 // 引入URL处理函数
@@ -53,7 +53,7 @@ const props = defineProps({
   }
 });
 
-defineEmits(['select-image']);
+const emit = defineEmits(['select-image']);
 
 // 处理全部图片URLs
 const processedImages = computed(() => {

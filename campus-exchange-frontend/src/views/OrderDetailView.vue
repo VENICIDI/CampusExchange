@@ -209,6 +209,15 @@
                     <i class="fas fa-check-circle me-1"></i> 确认收货
               </button>
 
+                  <!-- 已收货状态 - 去评价 -->
+              <button
+                v-if="order.status === 'RECEIVED'"
+                @click="goToReview"
+                class="btn btn-primary action-btn me-3"
+              >
+                <i class="fas fa-star me-1"></i> 去评价
+              </button>
+
                   <!-- 已收货状态 - 申请退货 -->
               <button
                 v-if="order.status === 'RECEIVED'"
@@ -610,6 +619,11 @@ const requestReturn = () => {
   returnForm.orderNo = order.value.orderNo;
   returnForm.reason = '';
   returnDialogVisible.value = true;
+};
+
+// 跳转到评价页面
+const goToReview = () => {
+  router.push(`/order/review/${order.value.orderNo}`);
 };
 
 // 提交退货申请

@@ -206,6 +206,15 @@
               >
                 <i class="fas fa-shipping-fast me-1"></i> 确认发货
               </button>
+              
+              <!-- 线下交易待发货状态 -->
+              <button
+                v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'OFFLINE'"
+                @click="shipOfflineOrder"
+                class="btn btn-primary action-btn me-3"
+              >
+                <i class="fas fa-handshake me-1"></i> 确认备货完成
+              </button>
 
               <!-- 退货申请处理 -->
               <button
@@ -227,6 +236,74 @@
           </div>
         </div>
       </div>
+
+      <!-- 评价信息 -->
+      <div v-if="order && order.status === 'COMPLETED'" class="review-section mt-4">
+        <h3 class="section-title">评价信息</h3>
+        <div class="card">
+          <div class="card-body">
+            <!-- 商家对买家的评价 -->
+            <div v-if="buyerReview" class="buyer-review mb-4">
+              <h5><i class="fas fa-comment-alt me-2"></i>您对买家的评价</h5>
+              <div class="review-content">
+                <div class="rating-score">
+                  <span class="label">评分：</span>
+                  <el-rate 
+                    v-model="buyerReview.ratingScore" 
+                    disabled 
+                    show-score 
+                    text-color="#ff9900">
+                  </el-rate>
+                </div>
+                <div v-if="buyerReview.content" class="review-text">
+                  <span class="label">评价内容：</span>
+                  <p>{{ buyerReview.content }}</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 买家对商品的评价 -->
+            <div v-if="productReviews && productReviews.length > 0" class="product-reviews mb-4">
+              <h5><i class="fas fa-box me-2"></i>买家对商品的评价</h5>
+              <div v-for="(review, index) in productReviews" :key="index" class="product-review-item">
+                <div class="rating-score">
+                  <span class="label">商品评分：</span>
+                  <el-rate 
+                    v-model="review.ratingScore" 
+                    disabled 
+                    show-score 
+                    text-color="#ff9900">
+                  </el-rate>
+                </div>
+                <div v-if="review.content" class="review-text">
+                  <span class="label">评价内容：</span>
+                  <p>{{ review.content }}</p>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 买家对商家服务的评价 -->
+            <div v-if="merchantReview" class="merchant-review">
+              <h5><i class="fas fa-store me-2"></i>买家对您服务的评价</h5>
+              <div class="review-content">
+                <div class="rating-score">
+                  <span class="label">服务评分：</span>
+                  <el-rate 
+                    v-model="merchantReview.serviceAttitudeRating" 
+                    disabled 
+                    show-score 
+                    text-color="#ff9900">
+                  </el-rate>
+                </div>
+                <div v-if="merchantReview.content" class="review-text">
+                  <span class="label">评价内容：</span>
+                  <p>{{ merchantReview.content }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
     <!-- 发货弹窗 -->
@@ -243,6 +320,26 @@
         <span class="dialog-footer">
           <el-button @click="shipDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="confirmShip" :loading="submitting">确认发货</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 线下交易备货完成弹窗 -->
+    <el-dialog
+      v-model="offlineShipDialogVisible"
+      title="确认备货完成"
+      width="500px"
+    >
+      <div class="text-center">
+        <p class="mb-3">确认已完成备货，等待买家线下取货？</p>
+        <p class="text-muted">订单号：{{ order?.orderNo }}</p>
+        <p class="text-muted">交易地点：{{ order?.offlineMeetingLocation }}</p>
+        <p class="text-muted">交易时间：{{ formatDate(order?.offlineMeetingTime) }}</p>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="offlineShipDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmOfflineShip" :loading="submitting">确认备货完成</el-button>
         </span>
       </template>
     </el-dialog>
@@ -283,6 +380,7 @@
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { orderApi } from '@/api/order';
+import { reviewApi } from '@/api/review';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const route = useRoute();
@@ -302,6 +400,14 @@ const returnForm = reactive({
   orderNo: '',
   remark: ''
 });
+
+// 线下交易备货完成弹窗
+const offlineShipDialogVisible = ref(false);
+
+// 评价信息
+const buyerReview = ref(null);
+const productReviews = ref([]);
+const merchantReview = ref(null);
 
 // 获取订单详情
 const fetchOrderDetail = async () => {
@@ -499,9 +605,43 @@ const orderTimeline = computed(() => {
   return timeline;
 });
 
+// 获取评价信息
+const fetchReviews = async () => {
+  if (!order.value || !order.value.orderNo) return;
+  
+  try {
+    const response = await reviewApi.getOrderReviews(order.value.orderNo);
+    if (response.data && response.data.code === 200) {
+      const reviewsData = response.data.data;
+      
+      // 设置买家评价信息（商家对买家的评价）
+      if (reviewsData.buyerReview) {
+        buyerReview.value = reviewsData.buyerReview;
+      }
+      
+      // 设置商品评价信息（买家对商品的评价）
+      if (reviewsData.productReviews) {
+        productReviews.value = reviewsData.productReviews;
+      }
+      
+      // 设置商家服务评价信息（买家对商家的评价）
+      if (reviewsData.merchantReview) {
+        merchantReview.value = reviewsData.merchantReview;
+      }
+    }
+  } catch (error) {
+    console.error('获取评价信息失败:', error);
+  }
+};
+
 // 发货相关
 const shipOrder = () => {
   shipDialogVisible.value = true;
+};
+
+// 线下交易发货
+const shipOfflineOrder = () => {
+  offlineShipDialogVisible.value = true;
 };
 
 const confirmShip = async () => {
@@ -519,6 +659,27 @@ const confirmShip = async () => {
   } catch (err) {
     console.error('订单发货出错:', err);
     ElMessage.error('订单发货失败：' + (err.message || '网络错误'));
+  } finally {
+    submitting.value = false;
+  }
+};
+
+// 确认线下交易备货完成
+const confirmOfflineShip = async () => {
+  submitting.value = true;
+  try {
+    const response = await orderApi.shipOrder(order.value.orderNo);
+    
+    if (response.data && response.data.code === 200) {
+      ElMessage.success('已确认备货完成，等待买家取货');
+      offlineShipDialogVisible.value = false;
+      fetchOrderDetail(); // 刷新订单信息
+    } else {
+      ElMessage.error('确认备货失败：' + (response.data?.message || '未知错误'));
+    }
+  } catch (err) {
+    console.error('确认备货出错:', err);
+    ElMessage.error('确认备货失败：' + (err.message || '网络错误'));
   } finally {
     submitting.value = false;
   }
@@ -573,9 +734,18 @@ const goBack = () => {
   router.back();
 };
 
-// 页面加载
-onMounted(() => {
-  fetchOrderDetail();
+// 初始化
+onMounted(async () => {
+  try {
+    loading.value = true;
+    await fetchOrderDetail();
+    await fetchReviews();
+  } catch (error) {
+    console.error(error);
+    ElMessage.error('获取订单详情失败');
+  } finally {
+    loading.value = false;
+  }
 });
 </script>
 
@@ -911,5 +1081,69 @@ onMounted(() => {
     margin-top: 0;
     text-align: left;
   }
+}
+
+.review-section {
+  margin-top: 30px;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  margin-bottom: 15px;
+  color: #333;
+  position: relative;
+  padding-left: 15px;
+}
+
+.section-title::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: #4568dc;
+  border-radius: 4px;
+}
+
+.review-content {
+  background-color: #f9f9f9;
+  padding: 15px;
+  border-radius: 8px;
+  margin-top: 10px;
+}
+
+.rating-score {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.label {
+  font-weight: 500;
+  color: #555;
+  margin-right: 10px;
+  min-width: 80px;
+}
+
+.review-text p {
+  margin: 0;
+  color: #666;
+  background-color: #fff;
+  padding: 10px;
+  border-radius: 6px;
+  border-left: 3px solid #4568dc;
+}
+
+.product-review-item {
+  border-bottom: 1px solid #eee;
+  padding-bottom: 15px;
+  margin-bottom: 15px;
+}
+
+.product-review-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
 }
 </style> 

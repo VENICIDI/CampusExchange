@@ -2,20 +2,21 @@
   <div class="merchant-orders-container">
     <div class="container py-5">
       <div class="page-header mb-4">
-        <h2 class="page-title">商家订单管理</h2>
+        <h2 class="page-title"><i class="fas fa-store-alt me-2"></i>商家订单管理</h2>
         <p class="text-muted small">管理和处理您的店铺订单，确保买家满意度</p>
       </div>
       
       <!-- 订单状态筛选 -->
-      <div class="status-filter mb-4">
-        <div class="btn-group">
+      <div class="status-filter mb-5 pt-4">
+        <div class="btn-group d-flex flex-wrap">
           <button 
             v-for="(label, status) in statusOptions" 
             :key="status" 
-            :class="['btn', currentStatus === status ? 'btn-primary' : 'btn-outline-primary']"
+            :class="['btn filter-btn mb-2 me-3', currentStatus === status ? 'btn-primary' : 'btn-outline-primary']"
             @click="filterByStatus(status)"
           >
             {{ label }}
+            <span v-if="getStatusCount(status) > 0" class="badge bg-danger ms-1">{{ getStatusCount(status) }}</span>
           </button>
         </div>
       </div>
@@ -29,103 +30,148 @@
       </div>
       
       <!-- 空状态 -->
-      <div v-else-if="orders.length === 0" class="text-center py-5 bg-light rounded">
-        <i class="fas fa-box-open fa-3x text-muted mb-3"></i>
+      <div v-else-if="orders.length === 0" class="empty-state text-center py-5 rounded">
+        <i class="fas fa-box-open fa-4x text-muted mb-3"></i>
         <h4>暂无订单</h4>
         <p class="text-muted">还没有收到任何订单，等待买家下单吧</p>
       </div>
       
       <!-- 订单列表 -->
       <div v-else class="order-list">
-        <div v-for="order in orders" :key="order.id" class="order-card mb-4 bg-white rounded shadow-sm">
+        <div v-for="order in orders" :key="order.id" class="order-card mb-4 bg-white rounded shadow-sm" @click="navigateToOrderDetail(order.orderNo)">
+          <!-- 订单头部信息 -->
           <div class="order-header d-flex justify-content-between align-items-center p-3 border-bottom">
             <div class="order-info">
-              <span class="order-number">订单号: {{ order.orderNo }}</span>
-              <span class="order-date ms-4">{{ formatDate(order.createTime) }}</span>
-              <span class="order-user ms-4 buyer-info">
+              <span class="order-number">订单号：{{ order.orderNo }}</span>
+              <span class="order-date ms-5">下单时间：{{ formatDate(order.createTime) }}</span>
+              <span class="order-user ms-5 buyer-info">
                 <i class="fas fa-user me-1"></i>
-                买家: {{ order.userName || '未知用户' }}
+                买家：{{ order.userName || '未知用户' }}
+              </span>
+              <span class="ms-5 trade-type">
+                <i class="fas" :class="order.tradeType === 'EXPRESS' ? 'fa-truck' : 'fa-handshake'"></i>
+                {{ order.tradeType === 'EXPRESS' ? '快递配送' : '线下交易' }}
               </span>
             </div>
             <div class="order-status">
               <span class="badge" :class="getStatusBadgeClass(order.status)">
                 {{ orderApi.getStatusText(order.status) }}
               </span>
-              <span class="ms-3 trade-type">
-                <i class="fas" :class="order.tradeType === 'EXPRESS' ? 'fa-truck' : 'fa-handshake'"></i>
-                {{ order.tradeType === 'EXPRESS' ? '快递配送' : '线下交易' }}
-              </span>
             </div>
           </div>
           
-          <div class="order-body p-3">
-            <div v-for="item in order.orderItems" :key="item.id" class="order-item d-flex mb-2">
-              <div class="item-image">
-                <img :src="item.productImage || 'https://via.placeholder.com/80'" :alt="item.productName" class="img-thumbnail" style="width: 80px; height: 80px; object-fit: cover;">
-              </div>
-              <div class="item-info ms-3 flex-grow-1">
-                <div class="item-name">{{ item.productName }}</div>
-                <div class="item-specs text-muted small">{{ item.specifications || '无规格信息' }}</div>
-                <div class="item-price-qty">
-                  <span class="price">¥{{ item.price }}</span>
-                  <span class="qty ms-2">x {{ item.quantity }}</span>
+          <!-- 订单商品表格 -->
+          <div class="order-body" @click.stop>
+            <div class="table-responsive">
+              <table class="table table-hover mb-0 text-center">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 12%">商品图片</th>
+                    <th style="width: 45%">商品名称</th>
+                    <th style="width: 15%">单价</th>
+                    <th style="width: 10%">数量</th>
+                    <th style="width: 18%">小计</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr v-for="item in order.orderItems" :key="item.id" class="product-row">
+                    <td class="align-middle text-center">
+                      <img :src="item.productImage || 'https://via.placeholder.com/60/e0e0e0/666666?text=商品'" 
+                           :alt="item.productName" 
+                           class="product-img">
+                    </td>
+                    <td class="align-middle text-center">
+                      <div class="product-name">{{ item.productName }}</div>
+                      <div class="item-specs text-muted small">{{ item.specifications || '无规格信息' }}</div>
+                    </td>
+                    <td class="align-middle text-center">¥{{ item.price }}</td>
+                    <td class="align-middle text-center">{{ item.quantity }}</td>
+                    <td class="align-middle text-center"><strong>¥{{ (item.price * item.quantity).toFixed(2) }}</strong></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          
+          <!-- 收货信息和订单金额 -->
+          <div class="order-info-bar p-3 border-top bg-light">
+            <div class="row w-100 align-items-center">
+              <!-- 左侧：交易信息 -->
+              <div class="col-md-6 col-sm-12 mb-md-0 mb-3">
+                <div v-if="order.tradeType === 'EXPRESS' && order.orderAddress" class="delivery-info d-flex align-items-center mb-2">
+                  <strong class="me-3 text-nowrap"><i class="fas fa-map-marker-alt me-1"></i>收货信息:</strong>
+                  <div class="delivery-detail d-flex align-items-center flex-1 text-truncate">
+                    <span class="recipient fw-semibold badge bg-light text-dark me-2">{{ order.orderAddress.recipient }}</span>
+                    <span class="phone text-secondary badge bg-light text-dark me-2">{{ order.orderAddress.phone }}</span>
+                    <span class="address text-muted text-truncate">{{ order.orderAddress.fullAddress }}</span>
+                  </div>
+                </div>
+                
+                <div v-if="order.tradeType === 'OFFLINE'" class="delivery-info d-flex align-items-center mb-2">
+                  <strong class="me-3 text-nowrap"><i class="fas fa-map-pin me-1"></i>线下交易:</strong>
+                  <div class="delivery-detail d-flex align-items-center flex-1">
+                    <span class="me-3 badge bg-light text-dark"><i class="fas fa-map-marker me-1"></i>{{ formatLocation(order.offlineMeetingLocation) }}</span>
+                    <span class="badge bg-light text-dark"><i class="fas fa-clock me-1"></i>{{ formatDate(order.offlineMeetingTime) }}</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          </div>
-          
-          <!-- 收货信息 -->
-          <div v-if="order.tradeType === 'EXPRESS' && order.orderAddress" class="order-address px-3 pb-2">
-            <div class="address-tag mb-2">
-              <i class="fas fa-map-marker-alt me-1"></i> 收货信息:
-            </div>
-            <div class="address-content ms-4">
-              <p class="mb-1">收货人: {{ order.orderAddress.recipient }}</p>
-              <p class="mb-1">联系电话: {{ order.orderAddress.phone }}</p>
-              <p class="mb-0">收货地址: {{ order.orderAddress.fullAddress }}</p>
-            </div>
-          </div>
-          
-          <div v-if="order.tradeType === 'OFFLINE'" class="order-address px-3 pb-2">
-            <div class="address-tag mb-2">
-              <i class="fas fa-map-pin me-1"></i> 线下交易信息:
-            </div>
-            <div class="address-content ms-4">
-              <p class="mb-1">交易地点: {{ order.offlineMeetingLocation || '未指定' }}</p>
-              <p class="mb-0">交易时间: {{ formatDate(order.offlineMeetingTime) || '未指定' }}</p>
-            </div>
-          </div>
-          
-          <div class="order-footer d-flex justify-content-between align-items-center p-3 border-top">
-            <div class="order-total">
-              <span class="text-muted">共{{ getTotalItemCount(order) }}件商品</span>
-              <span class="total-price ms-3">实付款：<strong class="text-danger">¥{{ order.actualPaymentAmount }}</strong></span>
-              <span class="commission ms-3 text-muted">平台佣金：¥{{ order.platformCommissionAmount }}</span>
-            </div>
-            <div class="order-actions">
-              <router-link :to="`/merchant/order/${order.orderNo}`" class="btn btn-sm btn-outline-primary me-2">
-                <i class="fas fa-eye me-1"></i>查看详情
-              </router-link>
               
-              <!-- 待发货状态 -->
-              <button v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'EXPRESS'" 
-                      @click="openShipDialog(order.orderNo)" 
-                      class="btn btn-sm btn-primary">
-                <i class="fas fa-shipping-fast me-1"></i>发货
-              </button>
-              
-              <!-- 退货申请处理 -->
-              <button v-if="order.status === 'RETURN_REQUESTED'" 
-                      @click="handleReturnRequest(order.orderNo, true)" 
-                      class="btn btn-sm btn-success me-2">
-                <i class="fas fa-check me-1"></i>同意退货
-              </button>
-              
-              <button v-if="order.status === 'RETURN_REQUESTED'" 
-                      @click="handleReturnRequest(order.orderNo, false)" 
-                      class="btn btn-sm btn-danger">
-                <i class="fas fa-times me-1"></i>拒绝退货
-              </button>
+              <!-- 右侧：订单操作和金额 -->
+              <div class="col-md-6 col-sm-12">
+                <div class="d-flex justify-content-md-end justify-content-start align-items-center">
+                  <!-- 订单操作按钮 -->
+                  <div class="order-actions me-4" @click.stop>
+                    <!-- 待发货状态 -->
+                    <button v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'EXPRESS'" 
+                            @click="openShipDialog(order.orderNo)" 
+                            class="btn btn-sm btn-primary me-2">
+                      <i class="fas fa-shipping-fast me-1"></i>发货
+                    </button>
+                    
+                    <!-- 线下交易待发货状态 -->
+                    <button v-if="order.status === 'PENDING_SHIPMENT' && order.tradeType === 'OFFLINE'" 
+                            @click="openOfflineShipDialog(order.orderNo)" 
+                            class="btn btn-sm btn-primary me-2">
+                      <i class="fas fa-handshake me-1"></i>备货完成
+                    </button>
+                    
+                    <!-- 退货申请处理 -->
+                    <button v-if="order.status === 'RETURN_REQUESTED'" 
+                            @click="handleReturnRequest(order.orderNo, true)" 
+                            class="btn btn-sm btn-success me-2">
+                      <i class="fas fa-check me-1"></i>同意
+                    </button>
+                    
+                    <button v-if="order.status === 'RETURN_REQUESTED'" 
+                            @click="handleReturnRequest(order.orderNo, false)" 
+                            class="btn btn-sm btn-danger me-2">
+                      <i class="fas fa-times me-1"></i>拒绝
+                    </button>
+
+                    <!-- 添加对买家评价的按钮 -->
+                    <button 
+                      v-if="(order.status === 'COMPLETED' || order.status === 'RECEIVED') && !order.buyerReviewed"
+                      @click="showBuyerReviewDialog(order)"
+                      class="btn btn-sm btn-outline-primary">
+                      评价买家
+                    </button>
+                    
+                    <!-- 显示已评价的信息 -->
+                    <span 
+                      v-if="order.status === 'COMPLETED' && order.buyerReviewed" 
+                      class="badge bg-success">
+                      <i class="fas fa-check-circle me-1"></i>已评价买家
+                    </span>
+                  </div>
+                  
+                  <!-- 订单金额 -->
+                  <div class="order-summary text-end">
+                    <div class="text-muted">共{{ getTotalItemCount(order) }}件商品</div>
+                    <div class="commission">平台佣金：<span class="text-primary">¥{{ formatCurrency(order.platformCommissionAmount) }}</span></div>
+                    <div class="total-price">实付款：<strong class="text-danger">¥{{ formatCurrency(order.actualPaymentAmount) }}</strong></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -136,14 +182,18 @@
         <nav aria-label="订单分页">
           <ul class="pagination">
             <li :class="['page-item', currentPage === 1 ? 'disabled' : '']">
-              <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)">上一页</a>
+              <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)">
+                <i class="fas fa-chevron-left"></i>
+              </a>
             </li>
             <li v-for="page in paginationItems" :key="page" 
                 :class="['page-item', page === currentPage ? 'active' : '']">
               <a class="page-link" href="#" @click.prevent="goToPage(page)">{{ page }}</a>
             </li>
             <li :class="['page-item', currentPage === totalPages ? 'disabled' : '']">
-              <a class="page-link" href="#" @click.prevent="goToPage(currentPage + 1)">下一页</a>
+              <a class="page-link" href="#" @click.prevent="goToPage(currentPage + 1)">
+                <i class="fas fa-chevron-right"></i>
+              </a>
             </li>
           </ul>
         </nav>
@@ -164,6 +214,24 @@
         <span class="dialog-footer">
           <el-button @click="shipDialogVisible = false">取消</el-button>
           <el-button type="primary" @click="confirmShip" :loading="submitting">确认发货</el-button>
+        </span>
+      </template>
+    </el-dialog>
+    
+    <!-- 线下交易备货完成弹窗 -->
+    <el-dialog
+      v-model="offlineShipDialogVisible"
+      title="确认备货完成"
+      width="500px"
+    >
+      <div class="text-center">
+        <p class="mb-3">确认已完成备货，等待买家线下取货？</p>
+        <p class="text-muted">订单号：{{shipForm.orderNo}}</p>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="offlineShipDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="confirmOfflineShip" :loading="submitting">确认备货完成</el-button>
         </span>
       </template>
     </el-dialog>
@@ -197,13 +265,56 @@
         </span>
       </template>
     </el-dialog>
+
+    <!-- 买家评价对话框 -->
+    <el-dialog
+      v-model="buyerReviewDialogVisible"
+      title="评价买家"
+      width="500px">
+      <div v-if="currentOrder" class="buyer-review-form">
+        <div class="order-info">
+          <div>订单号: {{ currentOrder.orderNo }}</div>
+          <div>买家: {{ currentOrder.userName }}</div>
+        </div>
+        
+        <div class="rating-section">
+          <div class="rating-label">买家评分:</div>
+          <div class="rating-stars">
+            <el-rate 
+              v-model="buyerReview.ratingScore"
+              :colors="['#FFECB3', '#FFD54F', '#FFC107']" 
+              :allow-half="true"
+              :show-score="true"
+            ></el-rate>
+          </div>
+        </div>
+        
+        <div class="comment-section">
+          <el-form-item label="评价内容">
+            <el-input 
+              v-model="buyerReview.comment" 
+              type="textarea" 
+              :rows="3"
+              placeholder="请输入对买家的评价内容（可选）"
+            ></el-input>
+          </el-form-item>
+        </div>
+      </div>
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="buyerReviewDialogVisible = false">取消</el-button>
+          <el-button type="primary" @click="submitBuyerReview" :loading="submitting">提交评价</el-button>
+        </span>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, reactive } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { orderApi } from '@/api/order';
+import { reviewApi } from '@/api/review';
 import { ElMessage, ElMessageBox } from 'element-plus';
 
 const router = useRouter();
@@ -213,21 +324,6 @@ const currentPage = ref(1);
 const pageSize = ref(10);
 const total = ref(0);
 const currentStatus = ref(null);
-
-// 发货弹窗
-const shipDialogVisible = ref(false);
-const shipForm = reactive({
-  orderNo: ''
-});
-
-// 退货处理弹窗
-const returnDialogVisible = ref(false);
-const isApproveReturn = ref(true);
-const returnForm = reactive({
-  orderNo: '',
-  remark: ''
-});
-
 const submitting = ref(false);
 
 // 订单状态选项
@@ -239,8 +335,48 @@ const statusOptions = {
   'RECEIVED': '已收货',
   'COMPLETED': '已完成',
   'CANCELLED': '已取消',
-  'RETURN_REQUESTED': '退货申请'
+  'RETURN_REQUESTED': '退货申请',
+  'RETURN_APPROVED': '退货中'
 };
+
+// 存储各状态的订单数量
+const statusCounts = ref({
+  'PENDING_PAYMENT': 0,
+  'PENDING_SHIPMENT': 0,
+  'SHIPPED': 0,
+  'RECEIVED': 0,
+  'COMPLETED': 0,
+  'CANCELLED': 0,
+  'RETURN_REQUESTED': 0,
+  'RETURN_APPROVED': 0,
+});
+
+// 发货相关
+const shipDialogVisible = ref(false);
+const offlineShipDialogVisible = ref(false);
+const shipForm = ref({
+  orderNo: '',
+  trackingNo: '',
+  expressCompany: ''
+});
+
+// 退货处理相关
+const returnDialogVisible = ref(false);
+const isApproveReturn = ref(true);
+const returnForm = ref({
+  orderNo: '',
+  approve: true,
+  remark: ''
+});
+
+// 买家评价相关
+const buyerReviewDialogVisible = ref(false);
+const currentOrder = ref(null);
+const buyerReview = ref({
+  orderNo: '',
+  ratingScore: 5,
+  comment: ''
+});
 
 // 计算总页数
 const totalPages = computed(() => {
@@ -282,14 +418,16 @@ const fetchOrders = async () => {
     const params = {
       pageNum: currentPage.value,
       pageSize: pageSize.value,
-      status: currentStatus.value
+      status: currentStatus.value === null ? undefined : currentStatus.value
     };
     
     const response = await orderApi.getMerchantOrders(params);
     if (response.data && response.data.code === 200) {
       orders.value = response.data.data.records || [];
       total.value = response.data.data.total || 0;
-      console.log('订单数据:', orders.value);
+      
+      // 统计各状态订单数量
+      await countOrdersByStatus();
     } else {
       ElMessage.error('获取订单列表失败：' + (response.data?.message || '未知错误'));
     }
@@ -301,11 +439,52 @@ const fetchOrders = async () => {
   }
 };
 
+// 统计各状态订单数量
+const countOrdersByStatus = async () => {
+  try {
+    // 调用API获取订单状态计数
+    const response = await orderApi.getOrderStatusCounts();
+    
+    if (response.data && response.data.code === 200) {
+      const counts = response.data.data;
+      
+      // 更新状态计数
+      Object.keys(counts).forEach(status => {
+        if (statusCounts.value[status] !== undefined) {
+          statusCounts.value[status] = counts[status];
+        }
+      });
+    } else {
+      console.error('获取订单状态统计失败：', response.data?.message || '未知错误');
+    }
+  } catch (error) {
+    console.error('获取订单状态统计失败：', error);
+  }
+};
+
+// 获取订单状态统计数量
+const getStatusCount = (status) => {
+  if (status === null) {
+    // 全部订单，计算所有状态数量之和
+    let totalCount = 0;
+    for (const statusKey in statusCounts.value) {
+      totalCount += statusCounts.value[statusKey] || 0;
+    }
+    return totalCount;
+  }
+  return statusCounts.value[status] || 0;
+};
+
 // 格式化日期
 const formatDate = (dateString) => {
-  if (!dateString) return '未知时间';
+  if (!dateString) return '';
   const date = new Date(dateString);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+// 格式化地址
+const formatLocation = (location) => {
+  return location || '未设置';
 };
 
 // 获取订单状态对应的Badge类
@@ -319,314 +498,496 @@ const getStatusBadgeClass = (status) => {
     'CANCELLED': 'bg-secondary',
     'RETURN_REQUESTED': 'bg-warning',
     'RETURN_APPROVED': 'bg-info',
-    'RETURN_GOODS_RECEIVED': 'bg-info',
-    'RETURNED': 'bg-success',
     'RETURN_REJECTED': 'bg-danger'
   };
-  
   return statusClassMap[status] || 'bg-secondary';
 };
 
-// 获取订单总件数
+// 计算订单商品总数量
 const getTotalItemCount = (order) => {
-  if (!order.orderItems || !Array.isArray(order.orderItems)) return 0;
-  return order.orderItems.reduce((total, item) => total + (item.quantity || 0), 0);
+  if (!order.orderItems) return 0;
+  return order.orderItems.reduce((sum, item) => sum + item.quantity, 0);
 };
 
-// 按状态筛选
+// 导航到订单详情页
+const navigateToOrderDetail = (orderNo) => {
+  if (!orderNo) return;
+  router.push(`/merchant/order/${orderNo}`);
+};
+
+// 按状态筛选订单
 const filterByStatus = (status) => {
-  if (status === 'null') status = null;
+  if (currentStatus.value === status) return;
   currentStatus.value = status;
-  currentPage.value = 1; // 重置为第一页
+  currentPage.value = 1;
   fetchOrders();
 };
 
-// 跳转到指定页
+// 翻页
 const goToPage = (page) => {
-  if (page < 1 || page > totalPages.value) return;
+  if (page < 1 || page > totalPages.value || page === currentPage.value) return;
   currentPage.value = page;
   fetchOrders();
 };
 
 // 打开发货弹窗
 const openShipDialog = (orderNo) => {
-  shipForm.orderNo = orderNo;
+  shipForm.value = {
+    orderNo: orderNo,
+    trackingNo: '',
+    expressCompany: ''
+  };
   shipDialogVisible.value = true;
+};
+
+// 打开线下交易备货完成弹窗
+const openOfflineShipDialog = (orderNo) => {
+  shipForm.value = {
+    orderNo: orderNo
+  };
+  offlineShipDialogVisible.value = true;
 };
 
 // 确认发货
 const confirmShip = async () => {
   submitting.value = true;
   try {
-    const response = await orderApi.shipOrder(
-      shipForm.orderNo,
-      '', // 不再传递快递单号
-      ''  // 不再传递快递公司
-    );
-    
+    const response = await orderApi.shipOrder(shipForm.value);
     if (response.data && response.data.code === 200) {
-      ElMessage.success('发货成功');
+      ElMessage.success('订单发货成功');
       shipDialogVisible.value = false;
       fetchOrders(); // 刷新订单列表
     } else {
-      ElMessage.error('发货失败：' + (response.data?.message || '未知错误'));
+      ElMessage.error('订单发货失败：' + (response.data?.message || '未知错误'));
     }
   } catch (error) {
-    console.error('发货出错：', error);
-    ElMessage.error('发货失败：' + (error.message || '网络错误'));
+    ElMessage.error('订单发货失败：' + (error.message || '网络错误'));
   } finally {
     submitting.value = false;
   }
 };
 
-// 打开退货处理弹窗
+// 确认线下交易备货完成
+const confirmOfflineShip = async () => {
+  submitting.value = true;
+  try {
+    // 对于线下交易，仍然使用发货接口，只是不需要物流信息
+    const response = await orderApi.shipOrder({
+      orderNo: shipForm.value.orderNo,
+      isOffline: true
+    });
+    
+    if (response.data && response.data.code === 200) {
+      ElMessage.success('已确认备货完成，等待买家上门取货');
+      offlineShipDialogVisible.value = false;
+      fetchOrders(); // 刷新订单列表
+    } else {
+      ElMessage.error('确认备货失败：' + (response.data?.message || '未知错误'));
+    }
+  } catch (error) {
+    ElMessage.error('确认备货失败：' + (error.message || '网络错误'));
+  } finally {
+    submitting.value = false;
+  }
+};
+
+// 处理退货请求
 const handleReturnRequest = (orderNo, approve) => {
-  returnForm.orderNo = orderNo;
-  returnForm.remark = '';
   isApproveReturn.value = approve;
+  returnForm.value = {
+    orderNo: orderNo,
+    approve: approve,
+    remark: ''
+  };
   returnDialogVisible.value = true;
 };
 
-// 确认处理退货申请
+// 确认处理退货请求
 const confirmReturnProcess = async () => {
   submitting.value = true;
   try {
-    const response = await orderApi.processReturnRequest(
-      returnForm.orderNo,
-      isApproveReturn.value,
-      returnForm.remark
-    );
+    const response = await orderApi.processReturnRequest({
+      orderNo: returnForm.value.orderNo,
+      approve: returnForm.value.approve,
+      remark: returnForm.value.remark
+    });
     
     if (response.data && response.data.code === 200) {
-      ElMessage.success(isApproveReturn.value ? '已同意退货申请' : '已拒绝退货申请');
+      ElMessage.success(returnForm.value.approve ? '已同意退货申请' : '已拒绝退货申请');
       returnDialogVisible.value = false;
       fetchOrders(); // 刷新订单列表
     } else {
-      ElMessage.error('处理失败：' + (response.data?.message || '未知错误'));
+      ElMessage.error('处理退货申请失败：' + (response.data?.message || '未知错误'));
     }
   } catch (error) {
-    console.error('处理退货申请出错：', error);
-    ElMessage.error('处理失败：' + (error.message || '网络错误'));
+    ElMessage.error('处理退货申请失败：' + (error.message || '网络错误'));
   } finally {
     submitting.value = false;
   }
 };
 
-// 页面加载时获取数据
-onMounted(() => {
-  fetchOrders();
+// 显示买家评价弹窗
+const showBuyerReviewDialog = (order) => {
+  currentOrder.value = order;
+  buyerReview.value = {
+    orderNo: order.orderNo,
+    ratingScore: 5,
+    comment: ''
+  };
+  buyerReviewDialogVisible.value = true;
+};
+
+// 提交买家评价
+const submitBuyerReview = async () => {
+  if (buyerReview.value.ratingScore < 1) {
+    ElMessage.warning('请至少给出1星评价');
+    return;
+  }
+  
+  submitting.value = true;
+  try {
+    const response = await reviewApi.submitBuyerReview(buyerReview.value.orderNo, {
+      ratingScore: buyerReview.value.ratingScore,
+      content: buyerReview.value.comment
+    });
+    
+    if (response.data && response.data.code === 200) {
+      ElMessage.success('评价买家成功');
+      buyerReviewDialogVisible.value = false;
+      
+      // 强制刷新整个订单列表
+      currentStatus.value = null; // 重置筛选条件
+      currentPage.value = 1; // 重置页码
+      await countOrdersByStatus(); // 重新统计各状态订单数量
+      await fetchOrders(); // 重新获取订单列表
+    } else {
+      ElMessage.error('评价买家失败：' + (response.data?.message || '未知错误'));
+    }
+  } catch (error) {
+    ElMessage.error('评价买家失败：' + (error.message || '网络错误'));
+  } finally {
+    submitting.value = false;
+  }
+};
+
+// 格式化货币显示
+const formatCurrency = (value) => {
+  if (value === null || value === undefined) return '--';
+  return parseFloat(value).toFixed(2);
+};
+
+// 组件挂载时获取数据
+onMounted(async () => {
+  // 先获取订单状态计数
+  await countOrdersByStatus();
+  // 再获取订单列表
+  await fetchOrders();
 });
 </script>
 
 <style scoped>
 .merchant-orders-container {
-  min-height: 80vh;
+  width: 100%;
   background-color: #f8f9fa;
+  min-height: 100vh;
 }
 
 .page-header {
-  border-bottom: 1px solid #eee;
-  padding-bottom: 15px;
-  margin-bottom: 25px;
+  margin-bottom: 2rem;
 }
 
 .page-title {
+  font-size: 1.75rem;
+  font-weight: 700;
   color: #333;
-  font-weight: 600;
-  margin-bottom: 5px;
+  margin-bottom: 0.5rem;
+  position: relative;
+  display: inline-block;
 }
 
-.status-filter {
-  margin-bottom: 20px;
-  overflow-x: auto;
-  white-space: nowrap;
-  padding-bottom: 10px;
+.page-title::after {
+  content: "";
+  position: absolute;
+  bottom: -8px;
+  left: 0;
+  width: 40%;
+  height: 3px;
+  background: linear-gradient(90deg, #4568dc, #3f78e0);
+  border-radius: 3px;
 }
 
-.status-filter .btn-group {
-  display: flex;
-  flex-wrap: nowrap;
+.container {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding: 0 15px;
 }
 
-.status-filter .btn {
-  min-width: 100px;
-  font-size: 0.9rem;
-  border-radius: 30px;
-  margin-right: 8px;
-  padding: 8px 15px;
+.filter-btn {
+  min-width: 110px;
+  border-radius: 8px;
+  margin-right: 10px;
+  padding: 10px 15px;
   transition: all 0.3s ease;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+}
+
+.filter-btn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08) !important;
+}
+
+.filter-btn.btn-primary {
+  box-shadow: 0 3px 8px rgba(0, 123, 255, 0.3);
 }
 
 .order-card {
-  border: none;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
-  transition: all 0.3s ease;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid #eaeaea;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 1.5rem;
+  border-radius: 8px;
 }
 
 .order-card:hover {
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  box-shadow: 0 5px 15px rgba(0,0,0,0.08) !important;
 }
 
 .order-header {
-  background-color: #f9f9f9;
-  padding: 15px !important;
+  background-color: #f8f9fa;
+  padding: 12px 20px;
+  width: 100%;
+  border-bottom: 1px solid #eee;
 }
 
-.order-number {
-  font-weight: 600;
-  color: #444;
-}
-
-.order-date {
-  color: #666;
+.order-number, .order-date {
   font-size: 0.9rem;
+  color: #666;
 }
 
 .buyer-info {
-  color: #4568dc;
   font-weight: 500;
+  color: #333;
 }
 
-.badge {
-  padding: 6px 12px;
-  font-weight: 500;
-  border-radius: 4px;
+.order-status .badge {
+  padding: 0.4rem 0.7rem;
+  font-size: 0.85rem;
 }
 
 .trade-type {
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: #666;
 }
 
 .order-body {
-  padding: 15px !important;
+  padding: 0;
 }
 
-.order-item {
-  background-color: #f9f9f9;
-  border-radius: 8px;
-  padding: 10px;
-  margin-bottom: 10px !important;
+/* 防止点击传播 */
+.order-body, 
+.order-actions button {
+  position: relative;
+  z-index: 2;
 }
 
-.item-image img {
+.delivery-info {
+  margin-bottom: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+}
+
+.delivery-detail {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  color: #666;
+}
+
+.product-row {
+  transition: background-color 0.2s;
+}
+
+.product-row:hover {
+  background-color: #f0f7ff;
+}
+
+.table {
+  margin-bottom: 0;
+  width: 100%;
+  text-align: center !important;
+}
+
+.table th {
+  font-weight: 600;
+  color: #444;
+  background-color: #f5f5f5;
+  padding: 12px 16px;
+  text-align: center !important;
+}
+
+.table td {
+  vertical-align: middle;
+  padding: 16px;
+  border-bottom: 1px solid #f0f0f0;
+  text-align: center !important;
+}
+
+.product-img {
   width: 70px;
   height: 70px;
   object-fit: cover;
-  border-radius: 6px;
+  border-radius: 4px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.08);
   transition: all 0.2s ease;
 }
 
-.item-name {
-  font-weight: 600;
+.product-name {
+  font-weight: 500;
+  margin-bottom: 6px;
   color: #333;
-  margin-bottom: 5px;
+  text-align: center !important;
+  width: 100%;
 }
 
-.item-price-qty {
-  margin-top: 8px;
+.order-info-bar {
+  background-color: #f9f9f9;
 }
 
-.price {
-  font-weight: 600;
-  color: #e74c3c;
+.info-label {
+  font-weight: 500;
+  color: #555;
+  margin-right: 8px;
 }
 
-.qty {
+.info-value {
   color: #666;
 }
 
-.order-address {
-  background-color: #f3f7ff;
-  border-radius: 0 0 8px 8px;
-  padding: 12px 15px;
-  margin-top: -10px;
-  font-size: 0.9rem;
+.recipient {
+  color: #333;
+  font-weight: 500;
 }
 
-.address-tag {
-  font-weight: 600;
-  color: #4568dc;
-}
-
-.address-content {
+.phone {
   color: #666;
 }
 
-.address-content p {
-  margin-bottom: 5px;
-}
-
-.order-footer {
-  padding: 15px !important;
+.address {
+  color: #666;
 }
 
 .total-price {
+  font-size: 1rem;
+  margin-top: 5px;
+}
+
+.total-price strong {
+  font-size: 1.2rem;
+}
+
+.commission {
+  font-size: 0.9rem;
+  margin-top: 5px;
+}
+
+.pagination-container {
+  margin-top: 2rem;
+}
+
+.page-link {
+  color: #4a6ee0;
+}
+
+.page-item.active .page-link {
+  background-color: #4a6ee0;
+  border-color: #4a6ee0;
+}
+
+.rating-section {
+  margin: 1.5rem 0;
+}
+
+.rating-label {
+  margin-bottom: 0.5rem;
   font-weight: 500;
 }
 
-.order-actions .btn {
-  border-radius: 4px;
-  font-weight: 500;
-  transition: all 0.2s ease;
+.empty-state {
+  padding: 3rem;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
 }
 
-.order-actions .btn:hover {
-  transform: translateY(-2px);
+.empty-state i {
+  opacity: 0.5;
+  margin-bottom: 1rem;
 }
 
-.btn-primary {
-  background: linear-gradient(45deg, #4568dc, #5d7ef0);
-  border: none;
+.empty-state h4 {
+  font-weight: 600;
+  margin-bottom: 0.5rem;
 }
 
-.btn-outline-primary {
-  color: #4568dc;
-  border-color: #4568dc;
+.empty-state p {
+  max-width: 400px;
+  margin: 0 auto;
 }
 
-.pagination {
-  margin-top: 20px;
-}
-
-.pagination .page-link {
-  color: #4568dc;
-  border-color: #dee2e6;
-}
-
-.pagination .page-item.active .page-link {
-  background-color: #4568dc;
-  border-color: #4568dc;
-}
-
-.pagination .page-item.disabled .page-link {
-  color: #6c757d;
-}
-
-@media (max-width: 768px) {
+/* 响应式调整 */
+@media (max-width: 992px) {
+  .filter-btn {
+    margin-bottom: 0.5rem;
+    min-width: 90px;
+    padding: 8px 12px;
+    font-size: 0.9rem;
+  }
+  
+  .order-info, .order-status {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+  
   .order-header {
     flex-direction: column;
-    align-items: flex-start !important;
+    align-items: flex-start;
+    padding: 10px 15px;
   }
   
-  .order-status {
-    margin-top: 10px;
-  }
-  
-  .order-date,
-  .order-user {
-    display: block;
+  .order-date, .order-user, .trade-type {
     margin-left: 0 !important;
-    margin-top: 5px;
+    margin-top: 0.5rem;
+    display: block;
   }
   
-  .order-footer {
-    flex-direction: column;
+  .order-info-bar {
+    padding: 10px;
   }
   
   .order-actions {
-    margin-top: 15px;
+    margin-bottom: 10px;
+    justify-content: center;
+    width: 100%;
   }
+  
+  .order-summary {
+    text-align: center;
+    width: 100%;
+  }
+}
+
+.status-filter {
+  margin-top: 1.5rem;
+  margin-bottom: 2rem;
 }
 </style> 

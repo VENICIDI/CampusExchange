@@ -33,6 +33,12 @@ export const fileApi = {
     console.log('处理图片URL:', url);
     
     try {
+      // 处理Base64格式图片数据
+      if (typeof url === 'string' && url.startsWith('data:image/')) {
+        console.log('  检测到base64格式图片数据，直接返回');
+        return url; // 直接返回base64数据，无需处理
+      }
+      
       // 处理特殊情况：如果URL是完整的localhost URL
       if (typeof url === 'string' && url.includes('localhost:8080/api/')) {
         // 关键修改：从URL中提取相对路径，移除域名和端口部分
@@ -79,6 +85,12 @@ export const fileApi = {
     console.log('处理商品图片URL:', url);
     
     try {
+      // 处理Base64格式图片数据
+      if (typeof url === 'string' && url.startsWith('data:image/')) {
+        console.log('  检测到base64格式图片数据，直接返回');
+        return url; // 直接返回base64数据，无需处理
+      }
+      
       // 处理特殊情况：如果URL是完整的localhost URL
       if (typeof url === 'string' && url.includes('localhost:8080/api/static/')) {
         // 提取相对路径部分

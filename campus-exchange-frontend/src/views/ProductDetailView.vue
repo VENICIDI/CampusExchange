@@ -9,6 +9,7 @@ import ProductGallery from '@/components/product/ProductGallery.vue'
 import ProductInfo from '@/components/product/ProductInfo.vue'
 import ProductDetailTabs from '@/components/product/ProductDetailTabs.vue'
 import MerchantInfo from '@/components/merchant/MerchantInfo.vue'
+import { reviewApi } from '@/api/all'
 
 const route = useRoute()
 const router = useRouter()
@@ -70,6 +71,71 @@ const processedImageUrls = computed(() => {
     return [];
   }
 });
+
+// 商品评价数据
+const reviews = ref([]);
+const loading = ref(false);
+const ratingFilter = ref('all'); // 评分筛选
+const filteredReviews = ref([]); // 筛选后的评价列表
+
+// 计算平均评分
+const avgRating = computed(() => {
+  if (!reviews.value || reviews.value.length === 0) return 0;
+  
+  const sum = reviews.value.reduce((total, review) => total + review.ratingScore, 0);
+  return sum / reviews.value.length;
+});
+
+// 获取某个评分的百分比
+const getRatingPercentage = (star) => {
+  if (!reviews.value || reviews.value.length === 0) return 0;
+  
+  const count = reviews.value.filter(review => review.ratingScore === star).length;
+  return Math.round((count / reviews.value.length) * 100);
+};
+
+// 筛选评价
+const filterReviews = () => {
+  if (ratingFilter.value === 'all') {
+    filteredReviews.value = [...reviews.value];
+  } else {
+    const starFilter = parseInt(ratingFilter.value);
+    filteredReviews.value = reviews.value.filter(review => review.ratingScore === starFilter);
+  }
+};
+
+// 获取商品评价
+const fetchProductReviews = async (productId) => {
+  loading.value = true;
+  try {
+    const response = await reviewApi.getProductReviews(productId);
+    if (response.data && response.data.code === 200) {
+      reviews.value = response.data.data;
+      
+      // 处理用户名，保护隐私
+      reviews.value.forEach(review => {
+        if (review.username) {
+          review.anonymousUsername = review.username.substring(0, 1) + '***' + 
+              (review.username.length > 1 ? review.username.substring(review.username.length - 1) : '');
+        }
+      });
+      
+      // 初始化筛选结果
+      filterReviews();
+    }
+  } catch (error) {
+    console.error('获取商品评价失败:', error);
+  } finally {
+    loading.value = false;
+  }
+};
+
+// 格式化评价时间
+const formatReviewTime = (time) => {
+  if (!time) return '';
+  const date = new Date(time);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
 
 // 获取商品详情
 const fetchProductDetail = async () => {
@@ -192,6 +258,7 @@ const handleBuyNow = () => {
 
 onMounted(() => {
   fetchProductDetail()
+  fetchProductReviews(productId.value)
 })
 </script>
 
@@ -255,6 +322,77 @@ onMounted(() => {
             />
           </template>
         </ProductDetailTabs>
+
+        <!-- 添加商品评价区域 -->
+        <div class="product-reviews-section">
+          <h2 class="section-title">
+            <span>商品评价</span>
+            <span class="review-count">({{ reviews.length }}条)</span>
+            
+            <!-- 添加评分统计 -->
+            <div class="rating-stats" v-if="reviews.length > 0">
+              <div class="avg-rating">
+                <span class="avg-score">{{ avgRating.toFixed(1) }}</span>
+                <el-rate v-model="avgRating" disabled show-score text-color="#ff9900"></el-rate>
+              </div>
+              <div class="rating-distribution">
+                <div v-for="i in 5" :key="i" class="rating-bar">
+                  <span class="star-level">{{ i }}星</span>
+                  <div class="progress-bar">
+                    <div class="progress" :style="{width: getRatingPercentage(i) + '%'}"></div>
+                  </div>
+                  <span class="rating-percent">{{ getRatingPercentage(i) }}%</span>
+                </div>
+              </div>
+            </div>
+          </h2>
+
+          <!-- 添加评价筛选 -->
+          <div class="review-filters" v-if="reviews.length > 0">
+            <el-radio-group v-model="ratingFilter" size="small" @change="filterReviews">
+              <el-radio-button label="all">全部</el-radio-button>
+              <el-radio-button label="5">5星</el-radio-button>
+              <el-radio-button label="4">4星</el-radio-button>
+              <el-radio-button label="3">3星</el-radio-button>
+              <el-radio-button label="2">2星</el-radio-button>
+              <el-radio-button label="1">1星</el-radio-button>
+            </el-radio-group>
+          </div>
+
+          <div v-if="loading" class="loading-reviews">
+            <div class="loading-spinner"></div>
+            <span>加载评价...</span>
+          </div>
+
+          <div v-else-if="filteredReviews.length > 0" class="reviews-list">
+            <div v-for="review in filteredReviews" :key="review.id" class="review-item">
+              <div class="review-header">
+                <div class="user-info">
+                  <span class="username">{{ review.anonymousUsername || '匿名用户' }}</span>
+                  <span class="review-time">{{ formatReviewTime(review.createTime) }}</span>
+                </div>
+                <div class="rating">
+                  <el-rate
+                    v-model="review.ratingScore"
+                    disabled
+                    text-color="#ff9900">
+                  </el-rate>
+                </div>
+              </div>
+              <div class="review-content">{{ review.content || '此用户未填写评价内容' }}</div>
+            </div>
+          </div>
+
+          <div v-else-if="reviews.length > 0 && filteredReviews.length === 0" class="empty-reviews">
+            <div class="empty-icon">🔍</div>
+            <div class="empty-text">没有符合条件的评价</div>
+          </div>
+
+          <div v-else class="empty-reviews">
+            <div class="empty-icon">📝</div>
+            <div class="empty-text">暂无评价</div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -366,6 +504,197 @@ onMounted(() => {
   
   .container {
     padding: 0 15px;
+  }
+}
+
+/* 评价区域样式 */
+.product-reviews-section {
+  margin-top: 30px;
+  padding: 20px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #ebeef5;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.section-title > span {
+  display: flex;
+  align-items: center;
+}
+
+.review-count {
+  font-size: 14px;
+  color: #909399;
+  margin-left: 8px;
+  font-weight: normal;
+}
+
+.loading-reviews, .empty-reviews {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 0;
+  color: #909399;
+}
+
+.loading-spinner {
+  width: 30px;
+  height: 30px;
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #409eff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 10px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.empty-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+}
+
+.reviews-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.review-item {
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 6px;
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.user-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.username {
+  font-size: 14px;
+  font-weight: 500;
+  color: #333;
+}
+
+.review-time {
+  font-size: 12px;
+  color: #909399;
+  margin-top: 4px;
+}
+
+.review-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: #606266;
+}
+
+/* 评价区域增强样式 */
+.rating-stats {
+  margin-top: 15px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-top: 1px dashed #ebeef5;
+  padding-top: 15px;
+  gap: 20px;
+}
+
+.avg-rating {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+}
+
+.avg-score {
+  font-size: 32px;
+  font-weight: 700;
+  color: #ff9900;
+  line-height: 1;
+  margin-bottom: 5px;
+}
+
+.rating-distribution {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rating-bar {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  gap: 8px;
+}
+
+.star-level {
+  width: 35px;
+  text-align: right;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 6px;
+  background-color: #f0f0f0;
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.progress {
+  height: 100%;
+  background-color: #ff9900;
+  border-radius: 3px;
+}
+
+.rating-percent {
+  width: 40px;
+  text-align: left;
+}
+
+.review-filters {
+  margin: 15px 0;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #ebeef5;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .rating-stats {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  
+  .avg-rating {
+    margin-bottom: 15px;
+  }
+  
+  .rating-distribution {
+    width: 100%;
   }
 }
 </style> 

@@ -7,6 +7,8 @@ import { orderApi } from './order';
 import { messageApi } from './message';
 import { merchantApi } from './merchant';
 import { fileApi } from './file';
+import { categoryApi } from './category';
+import { reviewApi } from './review';
 
 // 统一导出
 export {
@@ -18,7 +20,9 @@ export {
   orderApi,     // 订单相关
   messageApi,   // 消息通知相关
   merchantApi,  // 商家相关
-  fileApi       // 文件上传相关
+  fileApi,      // 文件上传相关
+  categoryApi,  // 分类相关
+  reviewApi     // 评价相关
 };
 
 export * from './product';
@@ -29,3 +33,4 @@ export * from './auth';
 export * from './file';
 export * from './message';
 export * from './cart'; 
+export * from './review'; 

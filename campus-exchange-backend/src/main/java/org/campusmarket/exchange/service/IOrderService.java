@@ -86,6 +86,14 @@ public interface IOrderService extends IService<Order> {
     boolean cancelOrder(Long userId, String orderNo);
     
     /**
+     * 系统自动取消订单（针对超时未支付的订单）
+     * @param userId 用户ID
+     * @param orderNo 订单编号
+     * @return 是否成功
+     */
+    boolean systemCancelOrder(Long userId, String orderNo);
+    
+    /**
      * 支付订单（模拟支付）
      * @param userId 用户ID
      * @param orderNo 订单编号
@@ -129,4 +137,11 @@ public interface IOrderService extends IService<Order> {
      * @return 是否成功
      */
     boolean processReturnRequest(Long merchantId, String orderNo, boolean approve, String remark);
+
+    /**
+     * 获取商家订单状态计数
+     * @param merchantId 商家ID
+     * @return 各状态订单数量
+     */
+    java.util.Map<String, Integer> getMerchantOrderStatusCounts(Long merchantId);
 } 

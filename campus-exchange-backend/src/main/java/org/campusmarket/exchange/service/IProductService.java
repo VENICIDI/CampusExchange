@@ -91,4 +91,12 @@ public interface IProductService {
      * @return 是否成功
      */
     boolean decreaseStock(Long productId, Integer quantity);
+    
+    /**
+     * 增加商品库存
+     * @param productId 商品ID
+     * @param quantity 增加数量
+     * @return 是否成功
+     */
+    boolean increaseStock(Long productId, Integer quantity);
 } 

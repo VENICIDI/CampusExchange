@@ -121,8 +121,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "商品不存在");
         }
         
-        // 2. 检查商品状态是否允许更新
-        if (product.getStatus() == ProductStatusEnum.SOLD_OUT || product.getStatus() == ProductStatusEnum.LOCKED) {
+        // 2. 检查商品状态是否允许更新 - 只锁定状态不允许修改，已售罄允许修改
+        if (product.getStatus() == ProductStatusEnum.LOCKED) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
                     "商品当前状态(" + product.getStatus().getDesc() + ")不允许修改");
         }
@@ -522,8 +522,8 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             throw new BusinessException(HttpStatus.NOT_FOUND.value(), "商品不存在");
         }
         
-        // 2. 检查商品状态是否允许删除
-        if (product.getStatus() == ProductStatusEnum.SOLD_OUT || product.getStatus() == ProductStatusEnum.LOCKED) {
+        // 2. 检查商品状态是否允许删除 - 只有锁定状态不允许删除，已售罄允许删除
+        if (product.getStatus() == ProductStatusEnum.LOCKED) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
                     "商品当前状态(" + product.getStatus().getDesc() + ")不允许删除");
         }
@@ -542,37 +542,74 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     @Override
     @Transactional(rollbackFor = Exception.class)
     public boolean decreaseStock(Long productId, Integer quantity) {
-        // 1. 查询商品
+        log.info("减少商品库存: {} - {}", productId, quantity);
+        
+        // 查询商品
         Product product = getById(productId);
         if (product == null) {
-            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "商品不存在");
+            log.warn("减少库存失败: 商品不存在");
+            return false;
         }
         
-        // 2. 校验库存
+        // 检查库存是否足够
         if (product.getStock() < quantity) {
-            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
-                    "商品[" + product.getName() + "]库存不足，当前库存:" + product.getStock());
+            log.warn("减少库存失败: 库存不足, 当前: {}, 需要: {}", product.getStock(), quantity);
+            return false;
         }
         
-        // 3. 减少库存
+        // 更新库存
         Product updateProduct = new Product();
         updateProduct.setId(productId);
-        int newStock = product.getStock() - quantity;
-        updateProduct.setStock(newStock);
-        
-        // 4. 增加销量
-        updateProduct.setSales(product.getSales() + quantity);
-        
-        // 5. 更新时间
+        updateProduct.setStock(product.getStock() - quantity);
         updateProduct.setUpdateTime(LocalDateTime.now());
         
-        // 6. 如果库存为零，自动将商品状态改为已售罄
-        if (newStock <= 0) {
-            log.info("商品[{}]库存为零，自动更新状态为已售罄", productId);
+        // 如果库存减少到0，标记为售罄
+        if (updateProduct.getStock() == 0) {
             updateProduct.setStatus(ProductStatusEnum.SOLD_OUT);
         }
         
-        // 7. 更新商品
-        return updateById(updateProduct);
+        boolean updated = updateById(updateProduct);
+        
+        if (updated) {
+            log.info("商品库存更新成功, 新库存: {}", updateProduct.getStock());
+        } else {
+            log.warn("商品库存更新失败");
+        }
+        
+        return updated;
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean increaseStock(Long productId, Integer quantity) {
+        log.info("增加商品库存: {} + {}", productId, quantity);
+        
+        // 查询商品
+        Product product = getById(productId);
+        if (product == null) {
+            log.warn("增加库存失败: 商品不存在");
+            return false;
+        }
+        
+        // 更新库存
+        Product updateProduct = new Product();
+        updateProduct.setId(productId);
+        updateProduct.setStock(product.getStock() + quantity);
+        updateProduct.setUpdateTime(LocalDateTime.now());
+        
+        // 如果商品当前是售罄状态且有库存了，改为在售状态
+        if (product.getStatus() == ProductStatusEnum.SOLD_OUT && updateProduct.getStock() > 0) {
+            updateProduct.setStatus(ProductStatusEnum.ON_SALE);
+        }
+        
+        boolean updated = updateById(updateProduct);
+        
+        if (updated) {
+            log.info("商品库存更新成功, 新库存: {}", updateProduct.getStock());
+        } else {
+            log.warn("商品库存更新失败");
+        }
+        
+        return updated;
     }
 } 

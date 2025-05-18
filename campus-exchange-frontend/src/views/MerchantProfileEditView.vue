@@ -410,10 +410,41 @@ const handleLicenseChange = async (event) => {
     return;
   }
 
-  // 上传文件
+  // 如果文件较大，可以选择转换为base64直接在前端显示
+  if (file.size < 2 * 1024 * 1024) { // 小于2MB的图片直接用base64显示
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target.result;
+      // 显示base64数据
+      businessLicenseUrl.value = base64Data;
+      // 商家表单中存储base64数据
+      storeForm.businessLicense = base64Data;
+      ElMessage.success('营业执照上传成功');
+      
+      // 尝试立即保存营业执照更改
+      if (merchantData.value && merchantData.value.id) {
+        try {
+          const updateData = {
+            id: merchantData.value.id,
+            businessLicense: base64Data
+          };
+          await merchantApi.updateMerchant(updateData);
+          console.log('营业执照信息已自动保存');
+        } catch (saveError) {
+          console.error('自动保存营业执照信息失败:', saveError);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    // 清空文件选择器
+    event.target.value = '';
+    return;
+  }
+  
+  // 继续原来的上传逻辑，适用于较大的文件
   const formData = new FormData();
   formData.append('file', file);
-
+  
   try {
     console.log('开始上传营业执照文件:', file.name, '大小:', file.size, '类型:', file.type);
     const response = await fileApi.uploadFile(formData);
@@ -487,6 +518,37 @@ const handleIdCardChange = async (event) => {
 
   if (file.size > 10 * 1024 * 1024) {
     ElMessage.error('图片大小不能超过10MB');
+    return;
+  }
+
+  // 如果文件较大，可以选择转换为base64直接在前端显示
+  if (file.size < 2 * 1024 * 1024) { // 小于2MB的图片直接用base64显示
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      const base64Data = e.target.result;
+      // 显示base64数据
+      idCardUrl.value = base64Data;
+      // 商家表单中存储base64数据
+      storeForm.idCard = base64Data;
+      ElMessage.success('身份证上传成功');
+      
+      // 尝试立即保存身份证更改
+      if (merchantData.value && merchantData.value.id) {
+        try {
+          const updateData = {
+            id: merchantData.value.id,
+            idCard: base64Data
+          };
+          await merchantApi.updateMerchant(updateData);
+          console.log('身份证信息已自动保存');
+        } catch (saveError) {
+          console.error('自动保存身份证信息失败:', saveError);
+        }
+      }
+    };
+    reader.readAsDataURL(file);
+    // 清空文件选择器
+    event.target.value = '';
     return;
   }
 
@@ -684,8 +746,19 @@ const resetForm = () => {
   }).catch(() => {});
 };
 
-// 引入URL处理函数
-const processImageUrl = fileApi.processImageUrl;
+// 处理图片URL，支持base64格式和常规URL
+const processImageUrl = (url) => {
+  if (!url) return '/default-avatar.png';
+  
+  // 检查是否为base64格式
+  if (typeof url === 'string' && url.startsWith('data:image/')) {
+    // 直接返回base64数据，无需处理
+    return url;
+  }
+  
+  // 使用原有的fileApi.processImageUrl处理常规URL
+  return fileApi.processImageUrl(url);
+};
 
 // 页面加载时获取数据
 onMounted(async () => {

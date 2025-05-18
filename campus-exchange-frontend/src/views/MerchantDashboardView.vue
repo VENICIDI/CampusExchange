@@ -29,6 +29,16 @@
         <div class="stat-value">{{ rating }}%</div>
         <div class="stat-label">好评率</div>
       </div>
+      <div class="stat-card">
+        <div class="stat-icon">🌟</div>
+        <div class="stat-value">
+          {{ serviceRating.toFixed(1) }}
+          <span class="rating-stars">
+            <el-rate v-model="serviceRating" disabled :colors="['#FFECB3', '#FFD54F', '#FFC107']" />
+          </span>
+        </div>
+        <div class="stat-label">服务评分</div>
+      </div>
     </div>
 
     <div class="dashboard-actions">
@@ -98,7 +108,7 @@
 <script setup>
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
-import { productApi, merchantApi, orderApi } from '@/api/all';
+import { productApi, merchantApi, orderApi, reviewApi } from '@/api/all';
 
 const router = useRouter();
 const storeName = ref('');
@@ -109,6 +119,7 @@ const products = ref([]);
 const user = ref(null);
 const merchant = ref(null);
 const isLoadingMerchant = ref(false);
+const serviceRating = ref(0);
 
 // 商家等级名称
 const merchantLevelName = computed(() => {
@@ -132,11 +143,9 @@ const fetchUserInfo = () => {
   if (userJson) {
     try {
       user.value = JSON.parse(userJson);
-      // 这里根据用户ID加载更多用户信息
-      console.log('当前登录用户:', user.value);
       fetchMerchantInfo(user.value.userId);
     } catch (e) {
-      console.error('解析用户数据失败:', e);
+      // 解析失败不做特殊处理
     }
   }
 };
@@ -145,15 +154,11 @@ const fetchUserInfo = () => {
 const fetchMerchantInfo = async (userId) => {
   isLoadingMerchant.value = true;
   try {
-    console.log('获取商家信息，用户ID:', userId);
-    
     // 调用API获取商家信息
     const response = await merchantApi.getMerchantByUserId(userId);
-    console.log('商家信息API响应:', response);
     
     if (response.data && response.data.code === 200) {
       merchant.value = response.data.data;
-      console.log('获取到的商家信息:', merchant.value);
       
       if (merchant.value) {
         // 使用API返回的商家名称
@@ -162,13 +167,29 @@ const fetchMerchantInfo = async (userId) => {
         // 设置商家评分
         rating.value = merchant.value.storePositiveRate || 100;
         
+        // 保存商家ID到localStorage
+        if (merchant.value.id) {
+          localStorage.setItem('merchantId', merchant.value.id.toString());
+          
+          // 更新user对象中的merchantId
+          try {
+            const userJson = localStorage.getItem('user');
+            if (userJson) {
+              const userData = JSON.parse(userJson);
+              userData.merchantId = merchant.value.id;
+              localStorage.setItem('user', JSON.stringify(userData));
+            }
+          } catch (e) {
+            // 更新用户数据失败时不做特殊处理
+          }
+        }
+        
         // 成功获取商家信息后加载商品
         await loadMerchantProducts();
         
         // 加载商家订单数量
         await loadMerchantOrderCount();
       } else {
-        console.error('未找到与用户关联的商家信息');
         // 如果没有商家信息，可以使用默认值
         merchant.value = {
           id: userId,
@@ -182,7 +203,6 @@ const fetchMerchantInfo = async (userId) => {
         rating.value = 100;
       }
     } else {
-      console.error('获取商家信息失败:', response);
       // 使用默认值
       merchant.value = {
         id: userId,
@@ -196,10 +216,6 @@ const fetchMerchantInfo = async (userId) => {
       rating.value = 100;
     }
   } catch (error) {
-    console.error('获取商家信息失败:', error);
-    if (error.response) {
-      console.error('服务器返回错误:', error.response.status, error.response.data);
-    }
     // 发生错误时使用默认值
     merchant.value = {
       id: userId,
@@ -225,25 +241,19 @@ const fetchMerchantInfo = async (userId) => {
 // 加载商家商品
 const loadMerchantProducts = async () => {
   if (!user.value || !user.value.userId) {
-    console.error('未找到有效的用户ID');
     return;
   }
 
   try {
-    console.log('加载商家商品，用户ID:', user.value.userId);
-    
     // 检查用户是否有merchant数据
     if (!merchant.value || !merchant.value.id) {
-      console.error('商家信息不完整，无法获取商品');
       return;
     }
     
     // 使用商家ID而非用户ID
     const merchantId = merchant.value.id;
-    console.log('开始请求商家商品数据，使用merchantId:', merchantId);
     
     const response = await productApi.getMerchantProducts(merchantId);
-    console.log('商家商品API响应:', response);
     
     if (response.data && response.data.code === 200) {
       // 检查数据结构，适应不同的返回格式
@@ -252,33 +262,15 @@ const loadMerchantProducts = async () => {
       } else if (Array.isArray(response.data.data)) {
         products.value = response.data.data;
       } else {
-        console.warn('无法解析商品数据格式，使用空数组');
         products.value = [];
       }
       
       productCount.value = products.value.length;
-      console.log('获取商家商品成功，商品数量:', products.value.length);
-      
-      if (products.value.length > 0) {
-        console.log('第一个商品样例:', products.value[0]);
-        console.log('商品新旧程度实际值:', products.value[0].productCondition);
-        console.log('所有商品新旧程度值:');
-        products.value.forEach((product, index) => {
-          console.log(`商品${index+1} (${product.name}) 新旧程度:`, product.productCondition);
-        });
-      } else {
-        console.log('商家暂无商品');
-      }
     } else {
-      console.error('获取商家商品失败，服务器响应:', response);
       products.value = [];
       productCount.value = 0;
     }
   } catch (error) {
-    console.error('加载商家商品时发生错误:', error);
-    if (error.response) {
-      console.error('服务器返回错误:', error.response.status, error.response.data);
-    }
     products.value = [];
     productCount.value = 0;
   }
@@ -287,34 +279,45 @@ const loadMerchantProducts = async () => {
 // 加载商家订单数量
 const loadMerchantOrderCount = async () => {
   if (!merchant.value || !merchant.value.id) {
-    console.error('商家信息不完整，无法获取订单数量');
     return;
   }
   
   try {
-    console.log('开始获取商家订单数量，商家ID:', merchant.value.id);
-    
-    // 使用orderApi获取商家订单数量，替换直接fetch请求
-    // 这样会自动带上身份验证信息
+    // 使用orderApi获取商家订单数量
     const response = await orderApi.getMerchantOrders({
       pageNum: 1,
       pageSize: 1
     });
     
-    console.log('获取商家订单数量响应:', response);
-    
     if (response.data && response.data.code === 200 && response.data.data && typeof response.data.data.total === 'number') {
       orderCount.value = response.data.data.total;
-      console.log('商家订单数量:', orderCount.value);
     } else {
-      console.error('获取商家订单数量失败，无法解析响应数据:', response.data);
       // 使用默认值
       orderCount.value = merchant.value.totalSalesCount || 0;
     }
   } catch (error) {
-    console.error('获取商家订单数量出错:', error);
     // 使用默认值
     orderCount.value = merchant.value.totalSalesCount || 0;
+  }
+};
+
+// 加载商家服务评分
+const loadMerchantServiceRating = async () => {
+  if (!merchant.value || !merchant.value.id) {
+    return;
+  }
+  
+  try {
+    // 调用API获取商家服务评价评分
+    const response = await reviewApi.getMerchantServiceRating(merchant.value.id);
+    
+    if (response.data && response.data.code === 200) {
+      serviceRating.value = response.data.data || 5.0;
+    } else {
+      serviceRating.value = 5.0; // 默认5分
+    }
+  } catch (error) {
+    serviceRating.value = 5.0; // 默认5分
   }
 };
 
@@ -345,7 +348,6 @@ const viewProduct = (id) => {
 // 查看所有商品
 const viewProducts = () => {
   // 这里可以实现跳转到商品管理页面的逻辑
-  console.log('查看所有商品');
 };
 
 // 查看订单
@@ -420,6 +422,12 @@ const formatCondition = (condition) => {
 // 页面加载时获取数据
 onMounted(() => {
   fetchUserInfo();
+  // 添加加载服务评分
+  setTimeout(() => {
+    if (merchant.value && merchant.value.id) {
+      loadMerchantServiceRating();
+    }
+  }, 1000); // 延迟1秒，确保merchant信息已加载
 });
 </script>
 
@@ -477,6 +485,15 @@ onMounted(() => {
   font-weight: 700;
   color: #4a6ee0;
   margin-bottom: 5px;
+  display: flex;
+  align-items: center;
+  flex-direction: column;
+}
+
+.rating-stars {
+  margin-top: 5px;
+  transform: scale(0.8);
+  transform-origin: center;
 }
 
 .stat-label {
