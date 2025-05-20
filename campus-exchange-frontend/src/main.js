@@ -5,6 +5,7 @@ import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import App from './App.vue'
 import router from './router'
+import './style.css' // 引入全局样式
 
 // 检查存储的用户数据是否有效
 const validateUserData = () => {

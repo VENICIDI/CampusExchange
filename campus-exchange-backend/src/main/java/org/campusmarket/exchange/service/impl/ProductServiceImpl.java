@@ -12,6 +12,7 @@ import org.campusmarket.exchange.dto.ProductVO;
 import org.campusmarket.exchange.entity.Product;
 import org.campusmarket.exchange.entity.ProductImage;
 import org.campusmarket.exchange.entity.Merchant;
+import org.campusmarket.exchange.enums.ProductConditionEnum;
 import org.campusmarket.exchange.enums.ProductStatusEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.ProductImageMapper;
@@ -260,8 +261,9 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
 
     @Override
     public Page<ProductVO> queryProducts(ProductQueryDTO queryDTO) {
-        log.info("分页查询商品列表: page={}, size={}, categoryId={}", 
-                queryDTO.getPageNum(), queryDTO.getPageSize(), queryDTO.getCategoryId());
+        log.info("分页查询商品列表: page={}, size={}, categoryId={}, orderBy={}, orderDirection={}", 
+                queryDTO.getPageNum(), queryDTO.getPageSize(), queryDTO.getCategoryId(), 
+                queryDTO.getOrderBy(), queryDTO.getOrderDirection());
         
         // 1. 构建查询条件
         LambdaQueryWrapper<Product> queryWrapper = Wrappers.<Product>lambdaQuery()
@@ -270,20 +272,41 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
                 .ge(queryDTO.getMinPrice() != null, Product::getCurrentPrice, queryDTO.getMinPrice())
                 .le(queryDTO.getMaxPrice() != null, Product::getCurrentPrice, queryDTO.getMaxPrice())
                 .like(StringUtils.hasText(queryDTO.getKeyword()), Product::getName, queryDTO.getKeyword())
-                .eq(Product::getStatus, ProductStatusEnum.ON_SALE)
-                .orderByDesc(Product::getPublishTime);
+                .eq(Product::getStatus, ProductStatusEnum.ON_SALE);
+        
+        // 处理商品条件筛选
+        List<ProductConditionEnum> conditions = queryDTO.getConditionList();
+        if (conditions != null && !conditions.isEmpty()) {
+            log.info("添加商品条件筛选: {}", conditions);
+            queryWrapper.in(Product::getProductCondition, conditions);
+        }
 
         // 2. 设置排序方式
-        if ("price".equals(queryDTO.getOrderBy())) {
-            queryWrapper.orderBy(true, "asc".equals(queryDTO.getOrderDirection()), Product::getCurrentPrice);
-        } else if ("sales".equals(queryDTO.getOrderBy()) || "sales_count".equals(queryDTO.getOrderBy())) {
-            queryWrapper.last("ORDER BY sales_count " + ("asc".equals(queryDTO.getOrderDirection()) ? "ASC" : "DESC"));
-        } else if ("rating".equals(queryDTO.getOrderBy()) || "average_rating".equals(queryDTO.getOrderBy())) {
-            queryWrapper.last("ORDER BY average_rating " + ("asc".equals(queryDTO.getOrderDirection()) ? "ASC" : "DESC"));
-        } else if ("publish_time".equals(queryDTO.getOrderBy())) {
-            queryWrapper.orderBy(true, "desc".equals(queryDTO.getOrderDirection()), Product::getPublishTime);
+        String orderBy = queryDTO.getOrderBy();
+        String orderDirection = queryDTO.getOrderDirection();
+        log.info("应用排序: 字段={}, 方向={}", orderBy, orderDirection);
+
+        boolean isAsc = "asc".equalsIgnoreCase(orderDirection);
+
+        if ("price".equals(orderBy)) {
+            // 价格排序: asc-从低到高, desc-从高到低
+            log.info("使用价格排序: {}", isAsc ? "从低到高" : "从高到低");
+            queryWrapper.orderBy(true, isAsc, Product::getCurrentPrice);
+        } else if ("sales".equals(orderBy) || "sales_count".equals(orderBy)) {
+            // 销量排序: 强制从高到低(降序)
+            log.info("使用销量排序: 从高到低");
+            queryWrapper.orderByDesc(Product::getSales);
+        } else if ("rating".equals(orderBy) || "average_rating".equals(orderBy)) {
+            // 好评度排序: 强制从高到低(降序)
+            log.info("使用好评度排序: 从高到低");
+            queryWrapper.orderByDesc(Product::getRating);
+        } else if ("publish_time".equals(orderBy)) {
+            // 发布时间排序: 强制从新到旧(降序)
+            log.info("使用发布时间排序: 从新到旧");
+            queryWrapper.orderByDesc(Product::getPublishTime);
         } else {
             // 默认按发布时间降序排列
+            log.info("使用默认排序: 发布时间从新到旧");
             queryWrapper.orderByDesc(Product::getPublishTime);
         }
         

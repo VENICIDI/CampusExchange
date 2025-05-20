@@ -405,18 +405,19 @@ const handleLogin = async () => {
 };
 
 // 根据角色跳转到对应页面
-function redirectBasedOnRole(role) {
-  if (role === 'ADMIN') {
-    console.log('管理员登录，跳转到管理后台');
-    router.push('/admin');
-  } else if (role === 'MERCHANT') {
-    console.log('商家登录，跳转到商家中心');
+const redirectBasedOnRole = (role) => {
+  console.log('根据角色重定向:', role);
+  if (role === 'MERCHANT') {
+    // 商家默认进入卖家模式，跳转到商家中心
+    localStorage.setItem('sellerMode', 'true');
     router.push('/merchant');
+  } else if (role === 'ADMIN') {
+    router.push('/admin');
   } else {
-    console.log('普通用户登录，跳转到首页');
+    // USER角色
     router.push('/');
   }
-}
+};
 
 // 组件挂载时获取验证码
 onMounted(() => {

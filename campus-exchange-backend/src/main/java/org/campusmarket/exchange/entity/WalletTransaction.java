@@ -30,7 +30,7 @@ public class WalletTransaction {
     private BigDecimal amount;
     
     // 交易类型：RECHARGE-充值，CONSUMPTION-消费，REFUND-退款，MERCHANT_INCOME-商家收入，PLATFORM_FEE-平台手续费支出，SYSTEM_ADJUSTMENT-系统调整
-    private WalletTransactionTypeEnum type;
+    private String type;
     
     // 交易描述
     private String description;

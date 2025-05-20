@@ -3,6 +3,7 @@
     <div class="product-image">
       <img :src="product.mainImage || product.coverImage || 'https://via.placeholder.com/200x150'" :alt="product.name" />
       <div v-if="product.negotiable" class="negotiable-badge">可议价</div>
+      <div v-if="product.categoryName" class="category-badge">{{ product.categoryName }}</div>
     </div>
     <div class="product-info">
       <h4 class="product-title">{{ product.name }}</h4>
@@ -14,6 +15,15 @@
         <span class="seller-icon">👤</span>
         <span class="seller-name">{{ product.storeName || '未知卖家' }}</span>
         <span class="store-link-arrow">→</span>
+      </div>
+      <div class="product-stats">
+        <span v-if="product.averageRating" class="rating">
+          <i class="el-icon-star-on"></i>
+          {{ parseFloat(product.averageRating).toFixed(1) }}
+        </span>
+        <span v-if="typeof product.salesCount === 'number'" class="sales">
+          已售{{ product.salesCount }}
+        </span>
       </div>
       <div class="product-meta">
         <span class="product-condition">{{ formatCondition(product.productCondition) }}</span>
@@ -136,6 +146,20 @@ const formatTime = (dateTime) => {
   z-index: 2;
 }
 
+.category-badge {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  background-color: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 3px 8px;
+  font-size: 12px;
+  border-radius: 4px;
+  font-weight: 500;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  z-index: 2;
+}
+
 .product-image img {
   width: 100%;
   height: 100%;
@@ -209,6 +233,27 @@ const formatTime = (dateTime) => {
 .store-link-arrow {
   color: #4a6ee0;
   font-weight: bold;
+}
+
+.product-stats {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.rating {
+  color: #ff9800;
+  display: flex;
+  align-items: center;
+}
+
+.rating i {
+  margin-right: 3px;
+}
+
+.sales {
+  color: #777;
 }
 
 .product-meta {

@@ -4,7 +4,6 @@ import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
-import org.campusmarket.exchange.enums.PointsTransactionTypeEnum;
 
 import java.time.LocalDateTime;
 
@@ -29,7 +28,7 @@ public class PointsTransaction {
     private Integer pointsChange;
     
     // 交易类型：PURCHASE_EARNED-消费获得，ORDER_DEDUCTION_USED-订单抵扣使用，SYSTEM_REWARD-系统奖励，SYSTEM_DEDUCTION-系统扣减, REFUND_RETURNED-退款返还积分
-    private PointsTransactionTypeEnum type;
+    private String type;
     
     // 交易描述
     private String description;

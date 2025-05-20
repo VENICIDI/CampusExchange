@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, watch, onErrorCaptured } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import FloatingHeader from './components/FloatingHeader.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -8,6 +9,8 @@ const currentYear = new Date().getFullYear()
 const user = ref(null)
 const hasError = ref(false)
 const errorMsg = ref('')
+// 用户是否处于卖家模式
+const isSeller = ref(false)
 
 // 计算属性：当前是否在登录/注册页面
 const isAuthPage = computed(() => {
@@ -19,6 +22,11 @@ const isLoggedIn = computed(() => {
   const loggedIn = user.value !== null && user.value !== undefined;
   console.log('用户登录状态:', loggedIn, user.value);
   return loggedIn;
+})
+
+// 计算属性：用户是否是卖家
+const isMerchant = computed(() => {
+  return isLoggedIn.value && user.value && user.value.role === 'MERCHANT';
 })
 
 // 错误捕获
@@ -73,19 +81,32 @@ const getUserFromStorage = () => {
       if (userData && userData.userId && userData.username) {
         user.value = userData;
         console.log('成功加载用户数据, user.value:', user.value);
+        
+        // 商家角色默认设置卖家模式状态
+        if (userData.role === 'MERCHANT') {
+          // 从localStorage中读取用户设置的模式，默认为卖家模式
+          const sellerMode = localStorage.getItem('sellerMode');
+          isSeller.value = sellerMode === null ? true : sellerMode === 'true';
+          console.log('商家用户模式:', isSeller.value ? '卖家模式' : '买家模式');
+        } else {
+          isSeller.value = false;
+        }
       } else {
         console.error('用户数据无效，缺少必要字段');
         localStorage.removeItem('user');
         user.value = null;
+        isSeller.value = false;
       }
     } catch (e) {
       console.error('解析用户数据失败:', e);
       localStorage.removeItem('user');
       user.value = null;
+      isSeller.value = false;
     }
   } else {
     console.log('本地存储中没有找到用户数据');
     user.value = null;
+    isSeller.value = false;
   }
 
   // 打印最终结果，确认用户状态
@@ -96,8 +117,10 @@ const getUserFromStorage = () => {
 const handleLogout = () => {
   // 清除localStorage
   localStorage.removeItem('user');
+  localStorage.removeItem('sellerMode');
   // 重置用户状态
   user.value = null;
+  isSeller.value = false;
   console.log('用户已退出登录');
   
   // 触发storage事件，确保所有组件感知到登出状态
@@ -109,9 +132,27 @@ const handleLogout = () => {
   }, 50);
 }
 
-// 游客模式，跳转到首页
-const handleGuestMode = () => {
-  router.push('/');
+// 切换卖家/买家模式
+const toggleSellerMode = () => {
+  if (!isMerchant.value) return;
+  
+  isSeller.value = !isSeller.value;
+  console.log('切换模式:', isSeller.value ? '卖家模式' : '买家模式');
+  
+  // 保存用户选择
+  localStorage.setItem('sellerMode', isSeller.value.toString());
+  
+  // 切换路由到对应入口页面
+  if (isSeller.value) {
+    // 切换到卖家中心
+    router.push('/merchant');
+  } else {
+    // 切换到买家首页
+    router.push('/');
+  }
+  
+  // 触发事件通知组件模式变化
+  window.dispatchEvent(new CustomEvent('mode-change', { detail: isSeller.value }));
 }
 
 // 监听localStorage的变化
@@ -136,61 +177,80 @@ onMounted(() => {
   
   // 添加一个自定义事件监听器，用于登录成功后更新用户状态
   window.addEventListener('user-login', getUserFromStorage);
+  
+  // 监听模式变化事件
+  window.addEventListener('mode-change', (e) => {
+    isSeller.value = e.detail;
+  });
 })
 
 // 组件卸载时移除监听器
 onUnmounted(() => {
   window.removeEventListener('storage', handleStorageChange);
   window.removeEventListener('user-login', getUserFromStorage);
+  window.removeEventListener('mode-change', null);
 })
 </script>
 
 <template>
-  <header class="header">
-    <div class="container header-container">
-      <h1 class="logo">
-        <router-link to="/">校园二手交易平台</router-link>
-      </h1>
-      
-      <nav class="nav">
-        <router-link :to="isLoggedIn && user.role === 'MERCHANT' ? '/merchant' : '/'" class="nav-link">首页</router-link>
-        <router-link v-if="isLoggedIn" :to="user.role === 'MERCHANT' ? '/orders/merchant' : '/orders/user'" class="nav-link">我的订单</router-link>
-        <router-link v-if="isLoggedIn && user.role === 'MERCHANT'" to="/product/publish" class="nav-link">发布商品</router-link>
-        <router-link v-if="isLoggedIn" to="/cart" class="nav-link">
-          <i class="fas fa-shopping-cart"></i> 购物车
-        </router-link>
-        <router-link to="/about" class="nav-link">关于</router-link>
-      </nav>
-      
-      <div class="auth-links">
-        <template v-if="isLoggedIn">
-          <div class="user-menu">
-            <span class="welcome-text">欢迎，{{ user.username }}</span>
-            <div class="role-switcher" v-if="user.role === 'MERCHANT'">
-              <router-link to="/" class="role-link" :class="{ 'router-link-active': $route.path === '/' }">买家首页</router-link>
-              <router-link to="/merchant" class="role-link" :class="{ 'router-link-active': $route.path === '/merchant' }">商家中心</router-link>
-            </div>
-            <router-link to="/user/profile" class="auth-link">个人信息</router-link>
-            <a href="#" @click.prevent="handleLogout" class="auth-link">退出</a>
-          </div>
-        </template>
-        <template v-else-if="isAuthPage">
-          <div class="guest-mode">
-            <router-link to="/" class="guest-btn">
-              <span class="guest-icon">👋</span>
-              <span>游客访问</span>
-            </router-link>
-          </div>
+  <!-- 黑色顶部导航栏 -->
+  <nav class="app-topnav">
+    <div class="container">
+      <div class="left">
+        <!-- 导航链接 - 左侧区域 -->
+        <!-- 根据模式显示不同的"首页"链接 -->
+        <template v-if="isLoggedIn && isMerchant && isSeller">
+          <!-- 卖家模式下，首页链接直接指向卖家中心 -->
+          <router-link to="/merchant" class="primary-link">首页</router-link>
         </template>
         <template v-else>
-          <router-link to="/login" class="auth-link">登录</router-link>
-          <router-link to="/register" class="auth-link register-link">注册</router-link>
+          <!-- 买家模式下的普通首页 -->
+          <router-link to="/" class="primary-link">首页</router-link>
+        </template>
+        
+        <!-- 用户登录且是商家+卖家模式 -->
+        <template v-if="isLoggedIn && isMerchant && isSeller">
+          <router-link to="/orders/merchant" class="primary-link">卖家订单</router-link>
+          <router-link to="/product/publish" class="primary-link">发布商品</router-link>
+        </template>
+        
+        <!-- 用户登录且是买家模式 -->
+        <template v-if="isLoggedIn && (!isMerchant || !isSeller)">
+          <router-link to="/orders/user" class="primary-link">我的订单</router-link>
+          <router-link to="/wallet" class="primary-link">我的钱包</router-link>
         </template>
       </div>
+      
+      <ul>
+        <template v-if="isLoggedIn">
+          <li><router-link to="/user/profile">{{ user.username }}</router-link></li>
+          <!-- 商家显示模式切换选项 -->
+          <li v-if="isMerchant">
+            <a href="javascript:;" @click.prevent="toggleSellerMode">
+              切换到{{ isSeller ? '买家' : '卖家' }}模式
+            </a>
+          </li>
+          <!-- 会员中心/商家信息 -->
+          <li>
+            <router-link :to="isMerchant && isSeller ? '/merchant/profile' : '/user/profile'">
+              {{ isMerchant && isSeller ? '商家信息' : '会员中心' }}
+            </router-link>
+          </li>
+          <li><a href="javascript:;" @click.prevent="handleLogout">退出登录</a></li>
+        </template>
+        <template v-else>
+          <li><router-link to="/login">请先登录</router-link></li>
+          <li><router-link to="/register">免费注册</router-link></li>
+        </template>
+      </ul>
     </div>
-  </header>
+  </nav>
+  
+  <!-- 浮动顶部导航栏，只在首页显示 -->
+  <FloatingHeader v-if="route.path === '/'" />
 
-  <main class="main">
+  <!-- 直接显示内容区域 -->
+  <main class="content">
     <!-- 错误处理显示 -->
     <div v-if="hasError" class="error-container">
       <div class="error-box">
@@ -215,227 +275,115 @@ onUnmounted(() => {
   </footer>
 </template>
 
-<style scoped>
-.header {
-  background-color: rgba(255, 255, 255, 0.98);
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
-  position: sticky;
-  top: 0;
-  z-index: 100;
-  transition: all 0.3s ease;
-  border-bottom: 2px solid #f0f0f0;
+<style>
+/* 全局重置 - 添加在样式最上方 */
+:root {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
 }
 
-.container {
-  max-width: 1200px;
-  margin: 0 auto;
-  padding: 0 20px;
+body, html {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  overflow-x: hidden;
+}
+
+/* 黑色顶部导航栏样式 */
+.app-topnav {
+  background: #333;
+  color: #cdcdcd;
+  margin: 0;
+  padding: 0;
   width: 100%;
 }
 
-.header-container {
+.app-topnav .container {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  height: 70px;
+  align-items: center;
+  height: 53px;
+  padding: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 100%;
 }
 
-.logo a {
-  color: #4a6ee0;
-  text-decoration: none;
-  font-size: 22px;
-  font-weight: 700;
-  transition: color 0.3s ease;
-  letter-spacing: 0.5px;
+.app-topnav .left {
   display: flex;
   align-items: center;
+  padding-left: 40px;
 }
 
-.logo a:before {
-  content: "🔄";
-  margin-right: 8px;
-  font-size: 24px;
-}
-
-.logo a:hover {
-  color: #304b99;
-}
-
-.nav {
-  display: flex;
-  gap: 24px;
-}
-
-.nav-link {
-  color: #333;
+.app-topnav .left a {
+  color: #cdcdcd;
   text-decoration: none;
-  font-weight: 600;
-  font-size: 16px;
-  padding: 5px 0;
-  transition: all 0.3s ease;
+  padding: 0 20px;
+}
+
+.app-topnav .left a:first-child {
+  padding-left: 0;
+}
+
+.app-topnav .left a:hover {
+  color: #4a6ee0;
+}
+
+.app-topnav .primary-link {
+  border-left: 2px solid #666;
+}
+
+.app-topnav .primary-link:first-child {
+  border-left: none;
+}
+
+.app-topnav ul {
+  display: flex;
+  height: 53px;
+  justify-content: flex-end;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0 40px 0 0;
+}
+
+.app-topnav li {
   position: relative;
 }
 
-.nav-link:after {
-  content: "";
-  position: absolute;
-  width: 0;
-  height: 2px;
-  bottom: 0;
-  left: 0;
-  background-color: #4a6ee0;
-  transition: width 0.3s ease;
-}
-
-.nav-link:hover,
-.nav-link.router-link-active {
-  color: #4a6ee0;
-}
-
-.nav-link:hover:after,
-.nav-link.router-link-active:after {
-  width: 100%;
-}
-
-.auth-links {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.welcome-text {
-  color: #555;
-  font-size: 14px;
-  margin-right: 5px;
-  font-weight: 500;
-}
-
-.auth-link {
-  color: #4a6ee0;
+.app-topnav li a {
+  padding: 0 15px;
+  color: #cdcdcd;
+  line-height: 1;
+  display: inline-block;
   text-decoration: none;
-  font-size: 14px;
-  font-weight: 600;
-  transition: all 0.3s ease;
 }
 
-.auth-link:hover {
-  color: #304b99;
-  transform: translateY(-1px);
+.app-topnav li a:hover {
+  color: #4a6ee0;
 }
 
-.register-link {
-  padding: 8px 16px;
-  background-color: #4a6ee0;
-  color: #fff;
-  border-radius: 6px;
-  box-shadow: 0 2px 6px rgba(74, 110, 224, 0.3);
-  transition: all 0.3s ease;
+.app-topnav li ~ li a {
+  border-left: 2px solid #666;
 }
 
-.register-link:hover {
-  background-color: #304b99;
-  color: #fff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 10px rgba(74, 110, 224, 0.4);
-}
-
-.main {
-  min-height: calc(100vh - 170px);
+.container {
+  max-width: 100%;
+  margin: 0;
+  padding: 0;
   width: 100%;
+}
+
+/* 内容区域样式 */
+.content {
+  min-height: calc(100vh - 53px - 80px); /* 减去顶部导航和页脚的高度 */
+  padding: 0;
+  margin: 0;
   background-color: #f8f9fa;
 }
 
-.footer {
-  background-color: #f0f4ff;
-  padding: 25px 0;
-  text-align: center;
-  color: #666;
-  font-size: 14px;
-  margin-top: 30px;
-  border-top: 1px solid #e0e6f7;
-}
-
-.guest-mode {
-  display: flex;
-  align-items: center;
-}
-
-.guest-btn {
-  display: flex;
-  align-items: center;
-  padding: 8px 16px;
-  background-color: #f0f4ff;
-  color: #4a6ee0;
-  border-radius: 8px;
-  border: 1px solid #e0e6f7;
-  transition: all 0.3s ease;
-  text-decoration: none;
-  font-weight: 500;
-  font-size: 14px;
-  box-shadow: 0 2px 6px rgba(74, 110, 224, 0.15);
-}
-
-.guest-btn:hover {
-  background-color: #e6ecff;
-  color: #3d5eca;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(74, 110, 224, 0.2);
-}
-
-.guest-icon {
-  margin-right: 8px;
-  font-size: 16px;
-}
-
-@media (max-width: 768px) {
-  .header-container {
-    flex-wrap: wrap;
-    height: auto;
-    padding: 15px 0;
-  }
-  
-  .nav {
-    order: 3;
-    width: 100%;
-    margin-top: 15px;
-    justify-content: center;
-  }
-  
-  .auth-links {
-    margin-left: auto;
-  }
-}
-
-/* 添加用户菜单和角色切换样式 */
-.user-menu {
-  display: flex;
-  align-items: center;
-  gap: 15px;
-}
-
-.role-switcher {
-  display: flex;
-  background-color: #f0f2f7;
-  border-radius: 6px;
-  padding: 2px;
-}
-
-.role-link {
-  padding: 5px 10px;
-  text-decoration: none;
-  color: #555;
-  font-size: 14px;
-  font-weight: 500;
-  border-radius: 4px;
-  transition: all 0.2s ease;
-}
-
-.role-link:hover,
-.role-link.router-link-active {
-  background-color: #4a6ee0;
-  color: #ffffff;
-}
-
+/* 错误处理样式 */
 .error-container {
   position: fixed;
   top: 0;
@@ -486,5 +434,34 @@ onUnmounted(() => {
 .retry-btn:hover,
 .home-btn:hover {
   background-color: #304b99;
+}
+
+/* 页脚样式 */
+.footer {
+  background-color: #f0f4ff;
+  padding: 25px 0;
+  text-align: center;
+  color: #666;
+  font-size: 14px;
+  border-top: 1px solid #e0e6f7;
+}
+
+@media (max-width: 768px) {
+  .app-topnav .container {
+    flex-direction: column;
+    height: auto;
+    padding: 10px 20px;
+  }
+  
+  .app-topnav .left {
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 10px;
+  }
+  
+  .app-topnav ul {
+    height: auto;
+    justify-content: center;
+  }
 }
 </style>

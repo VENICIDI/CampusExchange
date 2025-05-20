@@ -57,9 +57,9 @@
 
           <el-form-item label="性别" prop="gender">
             <el-radio-group v-model="form.gender">
-              <el-radio label="MALE">男</el-radio>
-              <el-radio label="FEMALE">女</el-radio>
-              <el-radio label="UNKNOWN">不公开</el-radio>
+              <el-radio :value="'MALE'">男</el-radio>
+              <el-radio :value="'FEMALE'">女</el-radio>
+              <el-radio :value="'UNKNOWN'">不公开</el-radio>
             </el-radio-group>
           </el-form-item>
 
@@ -113,7 +113,7 @@ const form = reactive({
 })
 
 // 图片预览URL
-const avatarUrl = ref('/default-avatar.png')
+const avatarUrl = ref('');
 
 // 文件上传引用
 const avatarInput = ref(null)
@@ -201,16 +201,15 @@ const handleAvatarChange = async (event) => {
     console.log('开始上传头像文件:', file.name, '大小:', file.size, '类型:', file.type);
     const response = await fileApi.uploadFile(formData);
     console.log('头像上传响应:', response);
+    console.log('完整头像上传响应数据:', JSON.stringify(response.data));
 
     if (response.data && response.data.code === 200 && typeof response.data.message === 'string' && response.data.message.startsWith('http')) {
       const newUploadedFullUrl = response.data.message;
       console.log('成功从后端获取新头像的完整URL:', newUploadedFullUrl);
 
-      // 更新用于预览的 avatarUrl
-      avatarUrl.value = processImageUrl(newUploadedFullUrl);
-
-      // 更新表单的avatar字段
-      form.avatar = processImageUrl(newUploadedFullUrl);
+      // 直接使用后端返回的完整URL，不做任何处理，确保与商家版本一致
+      avatarUrl.value = newUploadedFullUrl;
+      form.avatar = newUploadedFullUrl;
 
       console.log('设置后的预览头像URL (avatarUrl.value):', avatarUrl.value);
       console.log('设置到表单的头像URL (form.avatar):', form.avatar);
@@ -260,6 +259,13 @@ const saveUserData = async () => {
   // 确保头像URL不为undefined
   const avatarToSave = form.avatar || avatarUrl.value || '';
   console.log('最终使用的头像URL:', avatarToSave);
+  
+  // 检查是否为完整URL，如果是，提取相对路径部分
+  let processedAvatarUrl = avatarToSave;
+  if (processedAvatarUrl && processedAvatarUrl.includes('localhost:8080')) {
+    processedAvatarUrl = processedAvatarUrl.split('localhost:8080')[1];
+    console.log('处理后的头像URL (提取相对路径):', processedAvatarUrl);
+  }
 
   try {
     const updateUserData = {
@@ -273,13 +279,17 @@ const saveUserData = async () => {
       gender: form.gender,
       defaultAddress: form.defaultAddress,
       personalIntro: form.personalIntro,
-      avatar: avatarToSave
+      avatar: processedAvatarUrl
     };
 
     console.log('发送到后端的用户数据:', updateUserData);
+    console.log('发送到后端的头像URL:', updateUserData.avatar);
+    console.log('发送到后端的性别值:', updateUserData.gender);
+    console.log('发送到后端的城市值:', updateUserData.city);
 
     const response = await userApi.updateUserProfile(updateUserData);
     console.log('更新用户资料响应:', response);
+    console.log('更新用户资料完整响应数据:', JSON.stringify(response.data));
 
     if (response.data && response.data.code === 200) {
       ElMessage.success('用户信息保存成功');
@@ -288,7 +298,7 @@ const saveUserData = async () => {
       const userJson = localStorage.getItem('user');
       if (userJson) {
         const user = JSON.parse(userJson);
-        user.avatar = avatarToSave;
+        user.avatar = processedAvatarUrl;
         console.log('准备更新本地存储的用户信息，新头像URL:', user.avatar);
         localStorage.setItem('user', JSON.stringify(user));
 
@@ -321,7 +331,7 @@ const resetForm = () => {
 
 // 处理图片URL，支持base64格式和常规URL
 const processImageUrl = (url) => {
-  if (!url) return '/default-avatar.png';
+  if (!url) return ''; // 返回空字符串而非默认头像URL，避免404错误
   
   // 检查是否为base64格式
   if (typeof url === 'string' && url.startsWith('data:image/')) {

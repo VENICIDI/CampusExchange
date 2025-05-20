@@ -266,6 +266,10 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
         if (user.getWechat() != null) {
             existingUser.setWechat(user.getWechat());
         }
+        if (user.getCity() != null) {
+            System.out.println("更新城市为: " + user.getCity());
+            existingUser.setCity(user.getCity());
+        }
         if (user.getDefaultAddress() != null) {
             existingUser.setDefaultAddress(user.getDefaultAddress());
         }
@@ -276,6 +280,11 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
         if (user.getAvatar() != null) {
             System.out.println("更新头像URL为: " + user.getAvatar());
             existingUser.setAvatar(user.getAvatar());
+        }
+        // 更新性别
+        if (user.getGender() != null) {
+            System.out.println("更新性别为: " + user.getGender());
+            existingUser.setGender(user.getGender());
         }
         
         // 更新时间

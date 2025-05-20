@@ -93,6 +93,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/users/current").permitAll()
                         // 允许访问用户个人资料API
                         .requestMatchers("/api/users/profile", "/api/users/profile/**").permitAll()
+                        // 允许访问默认头像和静态资源
+                        .requestMatchers("/api/default-avatar.png", "/images/**", "/api/images/**").permitAll()
                         // 购物车和订单相关API需要认证
                         .requestMatchers("/api/cart/**", "/api/orders/**").authenticated()
                         // 其他请求需要认证 (确保这行在最后)

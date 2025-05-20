@@ -1,6 +1,11 @@
 package org.campusmarket.exchange.dto;
 
 import lombok.Data;
+import org.campusmarket.exchange.enums.ProductConditionEnum;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 // 商品查询DTO
 @Data
@@ -32,6 +37,25 @@ public class ProductQueryDTO {
     
     // 每页数量
     private Integer pageSize = 10;
+    
+    // 商品条件筛选，逗号分隔的字符串，如: "NEW,LIKE_NEW"
+    private String condition;
+    
+    // 获取商品条件枚举列表
+    public List<ProductConditionEnum> getConditionList() {
+        List<ProductConditionEnum> result = new ArrayList<>();
+        if (condition != null && !condition.isEmpty()) {
+            String[] conditions = condition.split(",");
+            for (String c : conditions) {
+                try {
+                    result.add(ProductConditionEnum.valueOf(c.trim()));
+                } catch (IllegalArgumentException e) {
+                    // 忽略不匹配的枚举值
+                }
+            }
+        }
+        return result;
+    }
     
     /**
      * 获取排序字段名

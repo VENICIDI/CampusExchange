@@ -27,4 +27,16 @@ public enum WalletTransactionTypeEnum {
         this.code = code;
         this.desc = desc;
     }
+    
+    /**
+     * 获取枚举值对应的描述
+     */
+    public static String getDescByCode(String code) {
+        for (WalletTransactionTypeEnum type : WalletTransactionTypeEnum.values()) {
+            if (type.getCode().equals(code)) {
+                return type.getDesc();
+            }
+        }
+        return code;
+    }
 } 

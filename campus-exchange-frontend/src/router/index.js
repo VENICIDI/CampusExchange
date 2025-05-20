@@ -12,6 +12,8 @@ import OrderDetailView from '../views/OrderDetailView.vue'
 import UserOrdersView from '../views/UserOrdersView.vue'
 import MerchantOrdersView from '../views/MerchantOrdersView.vue'
 import MerchantOrderDetailView from '@/views/MerchantOrderDetailView.vue'
+import WalletView from '../views/WalletView.vue'
+import PaymentView from '../views/PaymentView.vue'
 
 import CartView from '../views/CartView.vue'
 
@@ -140,6 +142,18 @@ const router = createRouter({
       name: 'buyer-profile-edit',
       component: () => import('@/views/BuyerProfileEditView.vue'),
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/wallet',
+      name: 'wallet',
+      component: WalletView,
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/payment',
+      name: 'payment',
+      component: PaymentView,
+      meta: { requiresAuth: true }
     }
   ],
 })
@@ -187,7 +201,9 @@ router.beforeEach((to, from, next) => {
 
   // 登录成功后的默认重定向逻辑
   if (to.path === '/' && isLoggedIn && userRole === 'MERCHANT' && from.path === '/login') {
-    console.log('商家登录成功，重定向到商家中心');
+    console.log('商家登录成功，默认进入卖家模式并跳转到商家中心');
+    // 默认设置为卖家模式
+    localStorage.setItem('sellerMode', 'true');
     next({ name: 'merchant-dashboard' });
     return;
   }

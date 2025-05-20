@@ -9,6 +9,7 @@ import { merchantApi } from './merchant';
 import { fileApi } from './file';
 import { categoryApi } from './category';
 import { reviewApi } from './review';
+import * as walletApi from './wallet';
 
 // 统一导出
 export {
@@ -22,7 +23,8 @@ export {
   merchantApi,  // 商家相关
   fileApi,      // 文件上传相关
   categoryApi,  // 分类相关
-  reviewApi     // 评价相关
+  reviewApi,    // 评价相关
+  walletApi     // 钱包相关
 };
 
 export * from './product';
@@ -34,3 +36,4 @@ export * from './file';
 export * from './message';
 export * from './cart'; 
 export * from './review'; 
+export * from './wallet'; 

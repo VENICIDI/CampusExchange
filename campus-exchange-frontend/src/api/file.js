@@ -28,7 +28,7 @@ export const fileApi = {
   
   // 处理图片URL，确保在前端正确显示
   processImageUrl: (url) => {
-    if (!url) return '/images/default-avatar.png';
+    if (!url) return ''; // 返回空字符串而非默认头像URL，避免404错误
     
     console.log('处理图片URL:', url);
     

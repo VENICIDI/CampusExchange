@@ -393,6 +393,31 @@ const cancelOrder = async (orderNo) => {
 // 支付订单
 const payOrder = async (orderNo) => {
   try {
+    await ElMessageBox.confirm('您想使用哪种方式支付此订单？', '选择支付方式', {
+      confirmButtonText: '钱包支付',
+      cancelButtonText: '普通支付',
+      distinguishCancelAndClose: true,
+      type: 'info',
+      duration: 2000
+    })
+      .then(() => {
+        // 钱包支付 - 跳转到支付页面
+        router.push(`/payment?id=${orderNo}`);
+      })
+      .catch((action) => {
+        if (action === 'cancel') {
+          // 普通支付
+          handleNormalPayment(orderNo);
+        }
+      });
+  } catch (error) {
+    console.error('支付选择出错：', error);
+  }
+};
+
+// 普通支付方法
+const handleNormalPayment = async (orderNo) => {
+  try {
     await ElMessageBox.confirm('确定要支付这个订单吗？', '订单支付', {
       confirmButtonText: '确定支付',
       cancelButtonText: '取消',
