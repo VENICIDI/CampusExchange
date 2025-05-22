@@ -10,11 +10,13 @@ import org.campusmarket.exchange.entity.Cart;
 import org.campusmarket.exchange.entity.CartItem;
 import org.campusmarket.exchange.entity.Merchant;
 import org.campusmarket.exchange.entity.Product;
+import org.campusmarket.exchange.entity.ProductImage;
 import org.campusmarket.exchange.enums.ProductStatusEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.CartItemMapper;
 import org.campusmarket.exchange.mapper.CartMapper;
 import org.campusmarket.exchange.mapper.MerchantMapper;
+import org.campusmarket.exchange.mapper.ProductImageMapper;
 import org.campusmarket.exchange.mapper.ProductMapper;
 import org.campusmarket.exchange.service.ICartService;
 import org.springframework.http.HttpStatus;
@@ -46,6 +48,9 @@ public class CartServiceImpl implements ICartService {
     
     @Resource
     private MerchantMapper merchantMapper;
+    
+    @Resource
+    private ProductImageMapper productImageMapper;
     
     @Override
     public Cart getUserCart(Long userId) {
@@ -210,13 +215,37 @@ public class CartServiceImpl implements ICartService {
         Map<Long, String> merchantNameMap = merchants.stream()
                 .collect(Collectors.toMap(Merchant::getId, Merchant::getStoreName));
         
+        // 查询所有商品的主图
+        Map<Long, String> productImageMap = new HashMap<>();
+        for (Long productId : productIds) {
+            // 查询是否有主图
+            LambdaQueryWrapper<ProductImage> imageQuery = Wrappers.<ProductImage>lambdaQuery()
+                    .eq(ProductImage::getProductId, productId)
+                    .eq(ProductImage::getIsMain, true)
+                    .orderByAsc(ProductImage::getSortOrder)
+                    .last("LIMIT 1");
+            
+            ProductImage mainImage = productImageMapper.selectOne(imageQuery);
+            if (mainImage != null) {
+                productImageMap.put(productId, mainImage.getImageUrl());
+            }
+        }
+        
         // 构建CartItemDTO列表
         List<CartItemDTO> cartItemDTOs = new ArrayList<>();
         for (CartItem item : cartItems) {
             Product product = productMap.get(item.getProductId());
             if (product != null) {
                 String merchantName = merchantNameMap.getOrDefault(product.getMerchantId(), "未知商家");
-                cartItemDTOs.add(CartItemDTO.fromCartItemAndProduct(item, product, merchantName));
+                CartItemDTO dto = CartItemDTO.fromCartItemAndProduct(item, product, merchantName);
+                
+                // 设置商品主图
+                String imageUrl = productImageMap.get(product.getId());
+                if (imageUrl != null) {
+                    dto.setProductImage(imageUrl);
+                }
+                
+                cartItemDTOs.add(dto);
             }
         }
         

@@ -44,7 +44,8 @@ const productImage = computed(() => {
     }
   }
   console.log('商品主图原始URL:', imageUrl);
-  return imageUrl;
+  // 使用processImageUrl处理图片URL
+  return imageUrl ? processImageUrl(imageUrl) : '/images/no-image.png';
 });
 
 // 处理后的图片URL数组
@@ -241,13 +242,15 @@ const handleBuyNow = () => {
   const orderPreview = {
     productId: product.value.id,
     productName: product.value.name,
-    productImage: productImage.value,
+    productImage: productImage.value, // 这里使用处理后的图片URL
     price: product.value.currentPrice,
     quantity: 1,
     stock: product.value.stock, // 添加库存信息
     sellerId: product.value.merchantId,
     sellerName: product.value.storeName || '未知卖家'
   }
+  
+  console.log('准备立即购买，订单预览信息:', orderPreview);
   
   // 存储订单预览信息到本地
   localStorage.setItem('orderPreview', JSON.stringify(orderPreview))
@@ -288,6 +291,7 @@ onMounted(() => {
               :images="processedImageUrls" 
               :coverImage="product.mainImage ? processImageUrl(product.mainImage) : ''" 
               :altText="product.name"
+              :showAllImages="true"
             />
           </div>
           
@@ -306,22 +310,29 @@ onMounted(() => {
             />
           </div>
         </div>
-        
         <!-- 使用商品详情选项卡组件 -->
         <ProductDetailTabs 
           :description="product.description"
           :usageInstructions="product.usageInstructions"
-        >
-          <template #product-images>
-            <!-- 商品图片展示区 -->
-            <ProductGallery 
-              :images="processedImageUrls" 
-              :coverImage="product.mainImage ? processImageUrl(product.mainImage) : ''" 
-              :altText="product.name"
-              :showAllImages="true"
-            />
-          </template>
-        </ProductDetailTabs>
+        />
+
+        <!-- 商品图片展示区域 -->
+        <div class="all-product-images">
+          <h2>商品图片</h2>
+          <div class="images-container">
+            <div 
+              v-for="(url, index) in processedImageUrls" 
+              :key="index" 
+              class="large-image-item"
+            >
+              <img 
+                :src="processImageUrl(url)" 
+                :alt="`${product.name} - 图片${index+1}`"
+                @error="(e) => e.target.src = '/images/no-image.png'"
+              />
+            </div>
+          </div>
+        </div>
 
         <!-- 添加商品评价区域 -->
         <div class="product-reviews-section">
@@ -696,5 +707,70 @@ onMounted(() => {
   .rating-distribution {
     width: 100%;
   }
+}
+
+/* 商品图片展示区域样式 */
+.all-product-images {
+  margin-top: 30px;
+  background-color: white;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+  padding: 30px;
+}
+
+.all-product-images h2 {
+  font-size: 1.5rem;
+  margin-bottom: 20px;
+  color: #333;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #eee;
+  position: relative;
+}
+
+.all-product-images h2::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 80px;
+  height: 3px;
+  background: linear-gradient(90deg, #4a6ee0, #6a8fff);
+  border-radius: 3px;
+}
+
+.images-container {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+}
+
+.large-image-item {
+  width: 100%;
+  height: 450px;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+  background-color: #fff;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.large-image-item:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
+}
+
+.large-image-item img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.4s ease;
+}
+
+.large-image-item:hover img {
+  transform: scale(1.05);
 }
 </style> 

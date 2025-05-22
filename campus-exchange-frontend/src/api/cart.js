@@ -17,6 +17,9 @@ export const cartApi = {
   // 删除购物车商品
   removeItem: (cartItemId) => api.delete(`/cart/${cartItemId}`),
   
+  // 清空已选中的购物车商品
+  clearSelectedItems: () => api.delete('/cart/selected'),
+  
   // 测试请求头
   testHeaders: () => api.get('/cart/test-headers')
 }; 

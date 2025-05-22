@@ -217,7 +217,6 @@ onUnmounted(() => {
         <!-- 用户登录且是买家模式 -->
         <template v-if="isLoggedIn && (!isMerchant || !isSeller)">
           <router-link to="/orders/user" class="primary-link">我的订单</router-link>
-          <router-link to="/wallet" class="primary-link">我的钱包</router-link>
         </template>
       </div>
       
@@ -232,7 +231,7 @@ onUnmounted(() => {
           </li>
           <!-- 会员中心/商家信息 -->
           <li>
-            <router-link :to="isMerchant && isSeller ? '/merchant/profile' : '/user/profile'">
+            <router-link :to="isMerchant && isSeller ? '/merchant/profile' : '/wallet'">
               {{ isMerchant && isSeller ? '商家信息' : '会员中心' }}
             </router-link>
           </li>
@@ -247,9 +246,9 @@ onUnmounted(() => {
   </nav>
   
   <!-- 浮动顶部导航栏，只在首页显示 -->
-  <FloatingHeader v-if="route.path === '/'" />
+  <FloatingHeader v-if="route.path === '/' || route.path === '/home' || route.path === '/buyer'" />
 
-  <!-- 直接显示内容区域 -->
+  <!-- 内容区域 -->
   <main class="content">
     <!-- 错误处理显示 -->
     <div v-if="hasError" class="error-container">
@@ -377,10 +376,16 @@ body, html {
 
 /* 内容区域样式 */
 .content {
-  min-height: calc(100vh - 53px - 80px); /* 减去顶部导航和页脚的高度 */
+  min-height: calc(100vh - 33px - 80px); /* 减去顶部导航和页脚的高度 */
   padding: 0;
   margin: 0;
   background-color: #f8f9fa;
+}
+
+/* 导航栏框线修复 */
+.floating-header {
+  outline: 1px solid #e4e4e4;
+  outline-offset: -1px;
 }
 
 /* 错误处理样式 */

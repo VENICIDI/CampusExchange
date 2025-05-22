@@ -102,6 +102,13 @@ public interface IOrderService extends IService<Order> {
     boolean payOrder(Long userId, String orderNo);
     
     /**
+     * 更新订单状态为已支付
+     * @param orderNo 订单号
+     * @return 是否成功
+     */
+    boolean updateOrderStatusToPaid(String orderNo);
+    
+    /**
      * 确认收货
      * @param userId 用户ID
      * @param orderNo 订单编号
@@ -137,6 +144,23 @@ public interface IOrderService extends IService<Order> {
      * @return 是否成功
      */
     boolean processReturnRequest(Long merchantId, String orderNo, boolean approve, String remark);
+    
+    /**
+     * 买家发出退货
+     * @param userId 用户ID
+     * @param orderNo 订单编号
+     * @param trackingInfo 参数已废弃，保留仅为兼容性
+     * @return 是否成功
+     */
+    boolean buyerReturnGoods(Long userId, String orderNo, String trackingInfo);
+    
+    /**
+     * 商家确认收到退货
+     * @param merchantId 商家ID
+     * @param orderNo 订单编号
+     * @return 是否成功
+     */
+    boolean confirmReturnReceived(Long merchantId, String orderNo);
 
     /**
      * 获取商家订单状态计数
@@ -144,4 +168,11 @@ public interface IOrderService extends IService<Order> {
      * @return 各状态订单数量
      */
     java.util.Map<String, Integer> getMerchantOrderStatusCounts(Long merchantId);
+    
+    /**
+     * 获取用户订单状态计数
+     * @param userId 用户ID
+     * @return 各状态订单数量
+     */
+    java.util.Map<String, Integer> getUserOrderStatusCounts(Long userId);
 } 

@@ -75,6 +75,10 @@ export const reviewApi = {
   /**
    * 获取订单的评价信息（商品评价、商家服务评价和买家评价）
    * @param {String} orderNo 订单号
+   * @param {Number} merchantId 商家ID（可选，商家用户需提供）
    */
-  getOrderReviews: (orderNo) => api.get(`/reviews/order/${orderNo}/all`)
+  getOrderReviews: (orderNo, merchantId) => {
+    const headers = merchantId ? { 'X-Merchant-Id': merchantId } : {};
+    return api.get(`/reviews/order/${orderNo}/all`, { headers });
+  }
 }; 

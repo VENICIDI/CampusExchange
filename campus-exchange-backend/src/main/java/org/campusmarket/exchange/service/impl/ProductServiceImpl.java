@@ -635,4 +635,103 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
         
         return updated;
     }
+
+    /**
+     * 更新商品销量
+     * @param productId 商品ID
+     * @param quantity 销售数量
+     * @return 是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateSalesCount(Long productId, Integer quantity) {
+        log.info("更新商品销量: {} + {}", productId, quantity);
+        
+        // 查询商品
+        Product product = getById(productId);
+        if (product == null) {
+            log.warn("更新销量失败: 商品不存在");
+            return false;
+        }
+        
+        // 计算新销量
+        Integer currentSales = product.getSales() == null ? 0 : product.getSales();
+        Integer newSales = currentSales + quantity;
+        
+        // 更新销量
+        Product updateProduct = new Product();
+        updateProduct.setId(productId);
+        updateProduct.setSales(newSales);
+        updateProduct.setUpdateTime(LocalDateTime.now());
+        
+        boolean updated = updateById(updateProduct);
+        
+        if (updated) {
+            log.info("商品销量更新成功, 新销量: {}", newSales);
+            
+            // 更新商家总销量和销售额
+            updateMerchantTotalSales(product.getMerchantId(), quantity, product.getCurrentPrice().multiply(new BigDecimal(quantity)));
+        } else {
+            log.warn("商品销量更新失败");
+        }
+        
+        return updated;
+    }
+
+    /**
+     * 更新商家总销量和销售额
+     * @param merchantId 商家ID
+     * @param quantityDelta 销量变化值
+     * @param amountDelta 销售额变化值
+     * @return 是否成功
+     */
+    private boolean updateMerchantTotalSales(Long merchantId, Integer quantityDelta, BigDecimal amountDelta) {
+        try {
+            if (merchantId == null || quantityDelta == null || amountDelta == null) {
+                log.warn("更新商家销量参数不完整: merchantId={}, quantityDelta={}, amountDelta={}", 
+                        merchantId, quantityDelta, amountDelta);
+                return false;
+            }
+            
+            log.info("更新商家[{}]总销量(+{})和销售额(+{})", merchantId, quantityDelta, amountDelta);
+            
+            // 查询商家当前信息
+            LambdaQueryWrapper<Merchant> queryWrapper = Wrappers.<Merchant>lambdaQuery()
+                    .eq(Merchant::getId, merchantId);
+            Merchant merchant = merchantMapper.selectOne(queryWrapper);
+            
+            if (merchant == null) {
+                log.warn("更新商家销量失败: 商家不存在 ID={}", merchantId);
+                return false;
+            }
+            
+            // 计算新的总销量和销售额
+            Integer currentSalesCount = merchant.getTotalSalesCount() == null ? 0 : merchant.getTotalSalesCount();
+            BigDecimal currentSalesAmount = merchant.getTotalSalesAmount() == null ? BigDecimal.ZERO : merchant.getTotalSalesAmount();
+            
+            Integer newSalesCount = currentSalesCount + quantityDelta;
+            BigDecimal newSalesAmount = currentSalesAmount.add(amountDelta);
+            
+            // 更新商家信息
+            Merchant updateMerchant = new Merchant();
+            updateMerchant.setId(merchantId);
+            updateMerchant.setTotalSalesCount(newSalesCount);
+            updateMerchant.setTotalSalesAmount(newSalesAmount);
+            updateMerchant.setUpdateTime(LocalDateTime.now());
+            
+            int updated = merchantMapper.updateById(updateMerchant);
+            
+            if (updated > 0) {
+                log.info("商家[{}]总销量和销售额更新成功, 新销量: {}, 新销售额: {}", 
+                        merchantId, newSalesCount, newSalesAmount);
+                return true;
+            } else {
+                log.warn("商家[{}]总销量和销售额更新失败", merchantId);
+                return false;
+            }
+        } catch (Exception e) {
+            log.error("更新商家总销量和销售额出错: {}", e.getMessage(), e);
+            return false;
+        }
+    }
 } 

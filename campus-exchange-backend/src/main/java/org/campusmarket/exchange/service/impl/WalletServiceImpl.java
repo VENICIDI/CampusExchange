@@ -316,4 +316,78 @@ public class WalletServiceImpl implements IWalletService {
         
         return wallet;
     }
+    
+    @Override
+    @Transactional
+    public boolean addOrderIncome(Long userId, Long orderId, String orderNo, BigDecimal amount) {
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "用户ID不能为空");
+        }
+        
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "收入金额必须大于0");
+        }
+        
+        // 获取商家钱包（实际是用户钱包）
+        Wallet wallet = getWalletByUserId(userId);
+        
+        // 更新钱包余额
+        BigDecimal newBalance = wallet.getBalance().add(amount);
+        wallet.setBalance(newBalance);
+        wallet.setUpdateTime(LocalDateTime.now());
+        
+        walletMapper.updateById(wallet);
+        
+        // 记录交易
+        WalletTransaction transaction = new WalletTransaction();
+        transaction.setWalletId(wallet.getId());
+        transaction.setRelatedOrderId(orderId);
+        transaction.setAmount(amount); // 收入是正数
+        transaction.setType(WalletTransactionTypeEnum.MERCHANT_INCOME.getCode());
+        transaction.setDescription("订单收入: " + orderNo);
+        transaction.setBalanceAfterTransaction(newBalance);
+        transaction.setCreateTime(LocalDateTime.now());
+        
+        walletTransactionMapper.insert(transaction);
+        
+        log.info("商家(用户ID:{})收到订单[{}]收入: {}", userId, orderNo, amount);
+        return true;
+    }
+    
+    @Override
+    @Transactional
+    public boolean refundToBuyer(Long userId, Long orderId, String orderNo, BigDecimal amount) {
+        if (userId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "用户ID不能为空");
+        }
+        
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "退款金额必须大于0");
+        }
+        
+        // 获取用户钱包
+        Wallet wallet = getWalletByUserId(userId);
+        
+        // 更新钱包余额
+        BigDecimal newBalance = wallet.getBalance().add(amount);
+        wallet.setBalance(newBalance);
+        wallet.setUpdateTime(LocalDateTime.now());
+        
+        walletMapper.updateById(wallet);
+        
+        // 记录交易
+        WalletTransaction transaction = new WalletTransaction();
+        transaction.setWalletId(wallet.getId());
+        transaction.setRelatedOrderId(orderId);
+        transaction.setAmount(amount); // 退款是正数
+        transaction.setType(WalletTransactionTypeEnum.REFUND.getCode());
+        transaction.setDescription("订单退款: " + orderNo);
+        transaction.setBalanceAfterTransaction(newBalance);
+        transaction.setCreateTime(LocalDateTime.now());
+        
+        walletTransactionMapper.insert(transaction);
+        
+        log.info("用户[{}]收到订单[{}]退款: {}", userId, orderNo, amount);
+        return true;
+    }
 } 

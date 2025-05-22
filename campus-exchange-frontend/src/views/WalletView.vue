@@ -1,7 +1,7 @@
 <script setup>
 import { ref, onMounted, computed, watch } from 'vue';
 import { ElMessage, ElMessageBox, ElLoading } from 'element-plus';
-import { getUserWalletAPI, rechargeWalletAPI, withdrawWalletAPI, getWalletTransactionsAPI } from '@/api/wallet';
+import { getUserWalletAPI, initUserWalletAPI, rechargeWalletAPI, withdrawWalletAPI, getWalletTransactionsAPI } from '@/api/wallet';
 
 // 页面状态
 const loading = ref(false);
@@ -28,7 +28,7 @@ const withdrawAmount = ref(null);
 const processingPayment = ref(false);
 
 // 获取钱包信息
-const fetchWalletInfo = async () => {
+const fetchWalletInfo = async (retryCount = 0) => {
   const loadingInstance = ElLoading.service({ 
     target: '.wallet-container',
     text: '加载钱包信息...' 
@@ -45,10 +45,61 @@ const fetchWalletInfo = async () => {
     }
   } catch (error) {
     console.error('获取钱包信息出错:', error);
-    ElMessage.error('获取钱包信息失败: ' + (error.message || '网络错误'));
+    
+    // 检测是否是钱包初始化冲突错误
+    if (error.message && error.message.includes('Duplicate entry') && error.message.includes('wallet.uk_user_id')) {
+      // 这是钱包初始化时的并发问题，尝试重试
+      if (retryCount < 3) { // 最多重试3次
+        console.log(`检测到钱包初始化冲突，1秒后进行第${retryCount + 1}次重试...`);
+        loadingInstance.close();
+        
+        // 等待一秒后重试，给后端时间处理冲突
+        setTimeout(() => {
+          fetchWalletInfo(retryCount + 1);
+        }, 1000);
+        return;
+      } else {
+        ElMessage.error('系统正在初始化您的钱包，请稍后再试');
+      }
+    } else {
+      // 尝试初始化钱包
+      try {
+        console.log('尝试初始化钱包...');
+        await initUserWallet();
+      } catch (initError) {
+        console.error('初始化钱包失败:', initError);
+      }
+    }
   } finally {
     loading.value = false;
     loadingInstance.close();
+  }
+};
+
+// 初始化用户钱包
+const initUserWallet = async () => {
+  try {
+    const response = await initUserWalletAPI();
+    
+    if (response.data && response.data.code === 200) {
+      console.log('钱包初始化成功');
+      wallet.value = response.data.data;
+      ElMessage.success('钱包初始化成功');
+    } else {
+      ElMessage.error('钱包初始化失败');
+    }
+  } catch (error) {
+    console.error('初始化钱包API错误:', error);
+    
+    // 如果是钱包已存在的错误，忽略它并重新获取钱包信息
+    if (error.message && error.message.includes('Duplicate entry')) {
+      console.log('钱包已存在，重新获取钱包信息...');
+      setTimeout(() => {
+        fetchWalletInfo();
+      }, 1000);
+    } else {
+      ElMessage.error('初始化钱包失败: ' + (error.message || '网络错误'));
+    }
   }
 };
 
@@ -64,6 +115,7 @@ const fetchTransactions = async (reset = false) => {
   
   try {
     loading.value = true;
+    // 确保传递正确的页码参数
     const response = await getWalletTransactionsAPI(
       currentPage.value, 
       pageSize,
@@ -72,13 +124,70 @@ const fetchTransactions = async (reset = false) => {
     
     if (response.data && response.data.code === 200) {
       const newTransactions = response.data.data.records || [];
+      console.log('获取到交易记录:', newTransactions);
       
-      if (newTransactions.length === 0 || newTransactions.length < pageSize) {
-        hasMoreTransactions.value = false;
+      // 处理余额显示问题 - 如果余额都显示为0，手动计算正确的余额
+      let runningBalance = activeTab.value === 'points' ? wallet.value.points : wallet.value.balance;
+      
+      // 按时间倒序排列交易记录（假设服务器返回的是按时间倒序排列的）
+      const processedTransactions = [...newTransactions];
+      
+      // 处理余额显示
+      for (let i = processedTransactions.length - 1; i >= 0; i--) {
+        const transaction = processedTransactions[i];
+        
+        // 确保amount字段有值（积分记录应使用pointsChange或amount）
+        if (activeTab.value === 'points' && !transaction.amount && transaction.pointsChange) {
+          transaction.amount = transaction.pointsChange;
+        }
+        
+        // 确保balanceAfter字段有值（积分记录应使用balanceAfterTransaction或balanceAfter）
+        if (activeTab.value === 'points') {
+          // 如果为积分记录，将balanceAfterTransaction赋值给balanceAfter
+          if (!transaction.balanceAfter && transaction.balanceAfterTransaction !== undefined) {
+            transaction.balanceAfter = transaction.balanceAfterTransaction;
+          }
+        }
+        
+        // 如果balanceAfter为空或0，则根据当前余额和交易金额计算
+        if (!transaction.balanceAfter && transaction.balanceAfter !== 0) {
+          // 对于较早的交易，累加计算余额（消费为负，充值为正）
+          if (i < processedTransactions.length - 1) {
+            runningBalance = runningBalance - transaction.amount;
+          }
+          transaction.balanceAfter = runningBalance;
+        }
       }
       
-      transactions.value = [...transactions.value, ...newTransactions];
-      currentPage.value++;
+      // 特殊处理积分交易记录筛选
+      let filteredTransactions = processedTransactions;
+      if (activeTab.value === 'points') {
+        // 积分页不需要额外筛选，因为API已经返回的是积分记录
+        filteredTransactions = processedTransactions;
+      } else {
+        // 余额页面，过滤掉积分相关记录
+        filteredTransactions = processedTransactions.filter(t => 
+          !t.type.includes('POINT') && 
+          !t.type.includes('PURCHASE_EARNED') && 
+          !t.type.includes('ORDER_DEDUCTION_USED') && 
+          !t.type.includes('SYSTEM_REWARD') && 
+          !t.type.includes('SYSTEM_DEDUCTION') && 
+          !t.type.includes('REFUND_RETURNED')
+        );
+      }
+      
+      // 检查当前页是否是最后一页
+      if (filteredTransactions.length === 0 || 
+          (response.data.data.pages && currentPage.value >= response.data.data.pages) ||
+          filteredTransactions.length < pageSize) {
+        hasMoreTransactions.value = false;
+      } else {
+        // 只有在成功加载并且还有更多页面时，才增加页码
+        currentPage.value++;
+      }
+      
+      // 正确合并新加载的数据与现有数据
+      transactions.value = [...transactions.value, ...filteredTransactions];
     } else {
       ElMessage.error('获取交易记录失败');
       hasMoreTransactions.value = false;
@@ -185,15 +294,37 @@ const handleWithdraw = async () => {
 
 // 获取交易类型文本
 const getTransactionTypeText = (type) => {
-  const typeMap = {
+  // 支持钱包交易类型
+  const walletTypeMap = {
     RECHARGE: '充值',
     WITHDRAW: '提现',
     PAYMENT: '支付',
     REFUND: '退款',
     REWARD: '奖励',
-    COMMISSION: '佣金'
+    COMMISSION: '佣金',
+    CONSUMPTION: '消费',
+    INCOME: '收入',
+    MERCHANT_INCOME: '商家收入',
+    TRANSFER: '转账',
+    EXCHANGE: '兑换',
+    DEDUCTION: '扣除',
+    SYSTEM_ADJUSTMENT: '系统调整',
+    POINT_EARNED: '获得积分',
+    POINT_USED: '使用积分',
+    POINT_EXPIRED: '积分过期',
+    INTEREST: '利息'
   };
-  return typeMap[type] || type;
+  
+  // 积分交易类型
+  const pointsTypeMap = {
+    PURCHASE_EARNED: '消费获得',
+    ORDER_DEDUCTION_USED: '订单抵扣使用',
+    SYSTEM_REWARD: '系统奖励',
+    SYSTEM_DEDUCTION: '系统扣减',
+    REFUND_RETURNED: '退款返还积分'
+  };
+  
+  return pointsTypeMap[type] || walletTypeMap[type] || type;
 };
 
 // 格式化日期
@@ -216,6 +347,12 @@ watch(activeTab, () => {
 
 // 页面加载
 onMounted(() => {
+  // 注意：如果后端没有实现wallet/init接口，可能会在首次访问时报错
+  // 这个问题是因为后端在用户访问钱包信息时，如果检测到用户没有钱包，会尝试创建一个
+  // 但如果同时发起多个请求，就会出现数据库唯一约束冲突
+  // 解决方法：
+  // 1. 后端实现wallet/init接口，支持显式初始化钱包
+  // 2. 后端在wallet/info接口中进行并发控制，确保同一用户只有一个钱包创建请求能够成功
   fetchWalletInfo();
   fetchTransactions();
 });
@@ -282,7 +419,14 @@ onMounted(() => {
                   : Math.abs(transaction.amount) 
               }}
             </td>
-            <td>              {{ activeTab === 'balance'                 ? '¥' + (transaction.balanceAfter ? transaction.balanceAfter.toFixed(2) : '0.00')                : transaction.balanceAfter               }}            </td>
+            <td>
+              {{ activeTab === 'balance' 
+                  ? '¥' + (transaction.balanceAfter !== null && transaction.balanceAfter !== undefined 
+                      ? Number(transaction.balanceAfter).toFixed(2) 
+                      : '0.00')
+                  : transaction.balanceAfter || 0
+              }}
+            </td>
             <td>{{ transaction.description }}</td>
           </tr>
           
@@ -296,7 +440,7 @@ onMounted(() => {
       
       <div v-if="hasMoreTransactions && transactions.length > 0" class="load-more">
         <button 
-          @click="fetchTransactions"
+          @click="fetchTransactions(false)"
           :disabled="loading"
         >
           {{ loading ? '加载中...' : '加载更多' }}

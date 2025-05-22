@@ -72,7 +72,7 @@ const fetchOrderInfo = async () => {
         return;
       }
       
-      // 设置倒计时（假设订单有30分钟支付时间）
+      // 设置倒计时（订单有30分钟支付时间）
       const orderTime = new Date(order.value.createTime).getTime();
       const expiryTime = orderTime + 30 * 60 * 1000; // 30分钟后
       const now = Date.now();
@@ -203,6 +203,17 @@ onMounted(() => {
     ElMessage.error('订单号不能为空');
     router.replace('/');
     return;
+  }
+  
+  // 从URL参数获取支付方式
+  const methodParam = route.query.method;
+  if (methodParam) {
+    if (methodParam === 'WALLET' || methodParam === 'ALIPAY' || methodParam === 'WECHAT') {
+      paymentMethod.value = methodParam;
+    } else if (methodParam === 'OTHER') {
+      // 其他支付方式默认设置为支付宝
+      paymentMethod.value = 'ALIPAY';
+    }
   }
   
   fetchOrderInfo();

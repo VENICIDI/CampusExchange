@@ -74,4 +74,24 @@ public interface IWalletService {
      * @return 更新后的钱包信息
      */
     Wallet usePoints(Long userId, Integer points);
+    
+    /**
+     * 订单收入添加到商家钱包
+     * @param userId 商家对应的用户ID
+     * @param orderId 订单ID
+     * @param orderNo 订单编号
+     * @param amount 金额
+     * @return 是否成功
+     */
+    boolean addOrderIncome(Long userId, Long orderId, String orderNo, BigDecimal amount);
+    
+    /**
+     * 退款给买家
+     * @param userId 用户ID
+     * @param orderId 订单ID
+     * @param orderNo 订单编号
+     * @param amount 退款金额
+     * @return 是否成功
+     */
+    boolean refundToBuyer(Long userId, Long orderId, String orderNo, BigDecimal amount);
 } 

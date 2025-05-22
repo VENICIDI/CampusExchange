@@ -10,16 +10,12 @@
           <h1 class="store-name">{{ merchantProfile.storeName }}</h1>
           <div class="merchant-badges">
             <span class="merchant-level">{{ merchantProfile.levelName || '新手商家' }}</span>
-            <span class="merchant-rating" v-if="merchantProfile.storePositiveRate">
+            <span class="merchant-rating" v-if="merchantProfile.storePositiveRate !== null && merchantProfile.storePositiveRate !== undefined">
               <i class="el-icon-star-on"></i>
-              好评率: {{ (merchantProfile.storePositiveRate * 100).toFixed(1) }}%
+              好评率: {{ formatRating(merchantProfile.storePositiveRate) }}%
             </span>
           </div>
           <div class="merchant-stats">
-            <div class="stat-item">
-              <span class="stat-label">总销量</span>
-              <span class="stat-value">{{ merchantProfile.totalSalesCount || 0 }}件</span>
-            </div>
             <div class="stat-item">
               <span class="stat-label">创店时间</span>
               <span class="stat-value">{{ formatDate(merchantProfile.createTime) }}</span>
@@ -74,11 +70,6 @@
           @click="viewProductDetail"
         />
       </div>
-      
-      <!-- 查看更多商品按钮 -->
-      <div class="view-all-products" v-if="merchantProfile && merchantProfile.products && merchantProfile.products.length >= 4">
-        <el-button type="link" @click="viewAllProducts">查看全部商品</el-button>
-      </div>
     </div>
 
     <!-- 店铺评价 -->
@@ -97,33 +88,17 @@
               text-color="#ff9900">
             </el-rate>
           </div>
-          <div class="merchant-positive-rate">好评率 {{ merchantProfile.storePositiveRate ? (merchantProfile.storePositiveRate * 100).toFixed(1) : '100' }}%</div>
+          <div class="merchant-positive-rate">好评率 {{ formatRating(merchantProfile.storePositiveRate) }}%</div>
         </div>
         
-        <div class="merchant-rating-breakdown">
-          <div class="rating-dimension">
-            <span class="dimension-name">服务态度</span>
-            <div class="dimension-value">
-              <span class="dimension-score">{{ serviceAttitudeAvg.toFixed(1) }}</span>
-              <el-rate 
-                :model-value="serviceAttitudeAvg" 
-                disabled
-                :colors="['#FFECB3', '#FFD54F', '#FFC107']"
-                :score-template="'{value}'">
-              </el-rate>
+        <!-- 使用五星评价系统，显示各星级评价的数量 -->
+        <div class="rating-distribution">
+          <div v-for="i in 5" :key="i" class="rating-bar">
+            <span class="star-level">{{ i }}星</span>
+            <div class="progress-bar">
+              <div class="progress" :style="{width: getRatingPercentage(i) + '%'}"></div>
             </div>
-          </div>
-          <div class="rating-dimension">
-            <span class="dimension-name">描述相符</span>
-            <div class="dimension-value">
-              <span class="dimension-score">{{ merchantAvgRating.toFixed(1) }}</span>
-              <el-rate 
-                :model-value="merchantAvgRating" 
-                disabled
-                :colors="['#FFECB3', '#FFD54F', '#FFC107']"
-                :score-template="'{value}'">
-              </el-rate>
-            </div>
+            <span class="rating-count">{{ getRatingCount(i) }}</span>
           </div>
         </div>
       </div>
@@ -269,12 +244,6 @@ const viewProductDetail = (productId) => {
   router.push(`/product/${productId}`);
 };
 
-// 查看全部商品
-const viewAllProducts = () => {
-  // TODO: 实现查看全部商品功能（可能需要新页面）
-  ElMessage.info('查看全部商品功能开发中');
-};
-
 // 进入商家中心
 const goToMerchantDashboard = () => {
   router.push('/merchant');
@@ -338,6 +307,47 @@ const formatUsername = (username) => {
 const handlePageChange = (page) => {
   console.log('切换到评价页:', page);
   // 暂未实现实际分页，仅显示UI
+};
+
+// 获取某个星级评价的百分比
+const getRatingPercentage = (star) => {
+  if (!merchantProfile.value || !merchantProfile.value.reviews || merchantProfile.value.reviews.length === 0) {
+    return 0;
+  }
+  
+  const count = merchantProfile.value.reviews.filter(
+    review => Math.floor(review.serviceAttitudeRating) === star
+  ).length;
+  
+  return Math.round((count / merchantProfile.value.reviews.length) * 100);
+};
+
+// 获取某个星级评价的数量
+const getRatingCount = (star) => {
+  if (!merchantProfile.value || !merchantProfile.value.reviews || merchantProfile.value.reviews.length === 0) {
+    return 0;
+  }
+  
+  return merchantProfile.value.reviews.filter(
+    review => Math.floor(review.serviceAttitudeRating) === star
+  ).length;
+};
+
+// 格式化好评率（处理8000%的问题）
+const formatRating = (rate) => {
+  if (rate === null || rate === undefined) return '100.0';
+  
+  // 如果rate已经是0-1之间的小数，直接格式化
+  if (rate >= 0 && rate <= 1) {
+    return (rate * 100).toFixed(1);
+  }
+  
+  // 如果rate已经是百分比形式（例如80而不是0.8）
+  if (rate > 1) {
+    return rate.toFixed(1);
+  }
+  
+  return '100.0';
 };
 
 // 页面加载时获取数据
@@ -556,11 +566,6 @@ onMounted(async () => {
   gap: 20px;
 }
 
-.view-all-products {
-  text-align: center;
-  margin-top: 20px;
-}
-
 .merchant-reviews-section {
   background-color: white;
   border-radius: 10px;
@@ -725,6 +730,45 @@ onMounted(async () => {
   margin-top: 20px;
   display: flex;
   justify-content: center;
+}
+
+/* 添加评价分布的样式 */
+.rating-distribution {
+  flex: 1;
+  padding-left: 20px;
+}
+
+.rating-bar {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.star-level {
+  width: 50px;
+  font-size: 12px;
+  color: #666;
+}
+
+.progress-bar {
+  flex: 1;
+  height: 12px;
+  background-color: #eee;
+  border-radius: 6px;
+  overflow: hidden;
+  margin: 0 10px;
+}
+
+.progress {
+  height: 100%;
+  background-color: #ff9900;
+}
+
+.rating-count {
+  width: 40px;
+  font-size: 12px;
+  color: #666;
+  text-align: right;
 }
 
 @media (max-width: 768px) {

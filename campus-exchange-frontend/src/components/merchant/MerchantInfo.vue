@@ -9,29 +9,6 @@
         <p>暂无商家信息</p>
       </div>
     </div>
-    <div v-else class="merchant-card" @click="navigateToStore">
-      <div class="merchant-avatar">
-        <img :src="processImageUrl(merchant.avatar) || '/images/default-avatar.png'" :alt="merchant.storeName">
-      </div>
-      <div class="merchant-details">
-        <h3>{{ merchant.storeName }}</h3>
-        <div class="merchant-meta" v-if="showMeta">
-          <div class="meta-item" v-if="merchant.level">
-            <span class="level-badge">{{ merchant.level }}</span>
-          </div>
-          <div class="meta-item" v-if="merchant.rating !== undefined">
-            <span class="rating">{{ merchant.rating }}分</span>
-          </div>
-          <div class="meta-item" v-if="merchant.salesCount !== undefined">
-            <span class="sales">销量: {{ merchant.salesCount }}</span>
-          </div>
-        </div>
-        <div class="view-store">
-          <span>进入店铺</span>
-          <i class="el-icon-arrow-right"></i>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 

@@ -16,7 +16,7 @@ import java.util.List;
 
 /**
  * 订单自动取消任务
- * 自动取消超过24小时未支付的订单
+ * 自动取消超过30分钟未支付的订单
  */
 @Slf4j
 @Component
@@ -32,16 +32,16 @@ public class OrderCancelTask {
     private JdbcTemplate jdbcTemplate;
     
     /**
-     * 每小时执行一次，自动取消超时未支付的订单
+     * 每5分钟执行一次，自动取消超时未支付的订单
      */
-    @Scheduled(cron = "0 0 */1 * * ?")
+    @Scheduled(cron = "0 */5 * * * ?")
     @Transactional(rollbackFor = Exception.class)
     public void cancelTimeoutOrders() {
         log.info("开始执行订单自动取消任务");
         
         try {
-            // 查询超过24小时未支付的订单
-            LocalDateTime deadline = LocalDateTime.now().minusHours(24);
+            // 查询超过30分钟未支付的订单
+            LocalDateTime deadline = LocalDateTime.now().minusMinutes(30);
             String sql = "SELECT id, order_no, user_id FROM `order` WHERE status = ? AND create_time < ? LIMIT 100";
             
             List<Order> timeoutOrders = jdbcTemplate.query(sql, 

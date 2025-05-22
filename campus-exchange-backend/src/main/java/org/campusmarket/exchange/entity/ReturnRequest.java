@@ -51,4 +51,92 @@ public class ReturnRequest {
     
     // 更新时间
     private LocalDateTime updateTime;
+    
+    // Getters and Setters
+    public Long getId() {
+        return id;
+    }
+    
+    public void setId(Long id) {
+        this.id = id;
+    }
+    
+    public Long getOrderId() {
+        return orderId;
+    }
+    
+    public void setOrderId(Long orderId) {
+        this.orderId = orderId;
+    }
+    
+    public Long getUserId() {
+        return userId;
+    }
+    
+    public void setUserId(Long userId) {
+        this.userId = userId;
+    }
+    
+    public Long getMerchantId() {
+        return merchantId;
+    }
+    
+    public void setMerchantId(Long merchantId) {
+        this.merchantId = merchantId;
+    }
+    
+    public String getReason() {
+        return reason;
+    }
+    
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+    
+    public ReturnStatusEnum getStatus() {
+        return status;
+    }
+    
+    public void setStatus(ReturnStatusEnum status) {
+        this.status = status;
+    }
+    
+    public String getRejectionReason() {
+        return rejectionReason;
+    }
+    
+    public void setRejectionReason(String rejectionReason) {
+        this.rejectionReason = rejectionReason;
+    }
+    
+    public LocalDateTime getApplicationTime() {
+        return applicationTime;
+    }
+    
+    public void setApplicationTime(LocalDateTime applicationTime) {
+        this.applicationTime = applicationTime;
+    }
+    
+    public LocalDateTime getUpdateTime() {
+        return updateTime;
+    }
+    
+    public void setUpdateTime(LocalDateTime updateTime) {
+        this.updateTime = updateTime;
+    }
+    
+    @Override
+    public String toString() {
+        return "ReturnRequest{" +
+                "id=" + id +
+                ", orderId=" + orderId +
+                ", userId=" + userId +
+                ", merchantId=" + merchantId +
+                ", reason='" + reason + '\'' +
+                ", status=" + status +
+                ", rejectionReason='" + rejectionReason + '\'' +
+                ", applicationTime=" + applicationTime +
+                ", updateTime=" + updateTime +
+                '}';
+    }
 } 

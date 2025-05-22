@@ -1,7 +1,7 @@
 <template>
   <div class="merchant-profile-edit">
     <div class="container">
-      <div class="page-header">
+      <div class="page-header text-center">
         <h1>商家信息管理</h1>
         <p>您可以在此页面修改个人资料和店铺信息</p>
       </div>
@@ -124,23 +124,55 @@
             </el-form>
           </el-tab-pane>
 
-          <el-tab-pane label="店铺统计" name="stats" v-if="merchantData">
-            <div class="stats-container">
-              <div class="stat-card">
-                <div class="stat-value">{{ merchantData.totalSalesCount || 0 }}</div>
-                <div class="stat-label">总销售量</div>
+          <el-tab-pane label="钱包余额" name="wallet" v-if="merchantData">
+            <div class="wallet-container">
+              <!-- 钱包信息卡片 -->
+              <div class="wallet-info-card">
+                <div class="wallet-balance">
+                  <div class="balance-title">钱包余额</div>
+                  <div class="balance-amount">{{ formatCurrency(walletBalance) }}</div>
+                  <div class="balance-actions">
+                    <el-button type="primary" @click="showRechargeDialog = true" size="small">充值</el-button>
+                    <el-button @click="showWithdrawDialog = true" size="small">提现</el-button>
               </div>
-              <div class="stat-card">
-                <div class="stat-value">{{ formatCurrency(merchantData.totalSalesAmount) }}</div>
-                <div class="stat-label">总销售额</div>
               </div>
-              <div class="stat-card">
-                <div class="stat-value">{{ (merchantData.storePositiveRate || 0) + '%' }}</div>
-                <div class="stat-label">好评率</div>
               </div>
-              <div class="stat-card level-card">
-                <div class="stat-value level-tag">{{ levelName }}</div>
-                <div class="stat-label">商家等级</div>
+              
+              <!-- 交易记录 -->
+              <div class="wallet-transactions">
+                <h3>交易记录</h3>
+                <div v-if="walletTransactions.length === 0 && !loadingTransactions" class="no-transactions">
+                  暂无交易记录
+                </div>
+                <el-table v-else :data="walletTransactions" style="width: 100%" v-loading="loadingTransactions">
+                  <el-table-column prop="createTime" label="交易时间" width="180">
+                    <template #default="scope">
+                      {{ formatDate(scope.row.createTime) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="type" label="交易类型" width="120">
+                    <template #default="scope">
+                      {{ getTransactionTypeName(scope.row.type) }}
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="amount" label="金额" width="120">
+                    <template #default="scope">
+                      <span :class="scope.row.amount >= 0 ? 'text-success' : 'text-danger'">
+                        {{ scope.row.amount >= 0 ? '+' : '' }}{{ formatCurrency(scope.row.amount) }}
+                      </span>
+                    </template>
+                  </el-table-column>
+                  <el-table-column prop="description" label="交易说明"></el-table-column>
+                  <el-table-column prop="balanceAfter" label="交易后余额" width="120">
+                    <template #default="scope">
+                      {{ formatCurrency(scope.row.balanceAfter) }}
+                    </template>
+                  </el-table-column>
+                </el-table>
+                
+                <div class="load-more" v-if="hasMoreTransactions && !loadingTransactions">
+                  <el-button type="text" @click="loadMoreTransactions">加载更多</el-button>
+                </div>
               </div>
             </div>
           </el-tab-pane>
@@ -153,14 +185,45 @@
       </el-card>
     </div>
   </div>
+
+  <!-- 充值弹窗 -->
+  <el-dialog v-model="showRechargeDialog" title="钱包充值" width="400px">
+    <el-form>
+      <el-form-item label="充值金额">
+        <el-input v-model="rechargeAmount" type="number" placeholder="请输入充值金额"></el-input>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="showRechargeDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleRecharge" :loading="processingPayment">确认充值</el-button>
+  </div>
+    </template>
+  </el-dialog>
+
+  <!-- 提现弹窗 -->
+  <el-dialog v-model="showWithdrawDialog" title="钱包提现" width="400px">
+    <el-form>
+      <el-form-item label="提现金额">
+        <el-input v-model="withdrawAmount" type="number" placeholder="请输入提现金额"></el-input>
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <div class="dialog-footer">
+        <el-button @click="showWithdrawDialog = false">取消</el-button>
+        <el-button type="primary" @click="handleWithdraw" :loading="processingPayment">确认提现</el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup>
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted, computed, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { merchantApi, userApi, fileApi } from '@/api/all'
 import api from '@/api/index'
+import { getUserWalletAPI, initUserWalletAPI, rechargeWalletAPI, withdrawWalletAPI, getWalletTransactionsAPI } from '@/api/wallet'
 
 // 路由和状态
 const router = useRouter()
@@ -175,6 +238,21 @@ const storeFormRef = ref(null)
 // 用户和商家数据
 const userData = ref(null)
 const merchantData = ref(null)
+
+// 钱包数据
+const walletBalance = ref(0)
+const walletTransactions = ref([])
+const loadingTransactions = ref(false)
+const hasMoreTransactions = ref(true)
+const currentTransactionPage = ref(1)
+const transactionPageSize = 10
+
+// 充值和提现弹窗
+const showRechargeDialog = ref(false)
+const showWithdrawDialog = ref(false)
+const rechargeAmount = ref('')
+const withdrawAmount = ref('')
+const processingPayment = ref(false)
 
 // 表单数据
 const basicForm = reactive({
@@ -779,7 +857,234 @@ onMounted(async () => {
       idCardUrl.value = processImageUrl(merchantData.value.idCard);
     }
   }
+  
+  // 如果选中了钱包标签页，则加载钱包数据
+  if (activeTab.value === 'wallet') {
+    fetchWalletInfo();
+    loadWalletTransactions(true);
+  }
 });
+
+// 监听标签页切换，切换到钱包时加载钱包数据
+watch(activeTab, (newTab) => {
+  if (newTab === 'wallet') {
+    fetchWalletInfo();
+    loadWalletTransactions(true);
+  }
+});
+
+// 获取钱包信息
+const fetchWalletInfo = async () => {
+  try {
+    const response = await getUserWalletAPI();
+    
+    if (response.data && response.data.code === 200) {
+      const walletData = response.data.data;
+      walletBalance.value = walletData.balance || 0;
+    } else {
+      // 如果获取失败，尝试初始化钱包
+      await initUserWallet();
+    }
+  } catch (error) {
+    console.error('获取钱包信息出错:', error);
+    // 尝试初始化钱包
+    await initUserWallet();
+  }
+};
+
+// 初始化钱包
+const initUserWallet = async () => {
+  try {
+    const response = await initUserWalletAPI();
+    
+    if (response.data && response.data.code === 200) {
+      const walletData = response.data.data;
+      walletBalance.value = walletData.balance || 0;
+      ElMessage.success('钱包初始化成功');
+    } else {
+      ElMessage.error('钱包初始化失败');
+    }
+  } catch (error) {
+    console.error('初始化钱包出错:', error);
+    if (error.message && error.message.includes('Duplicate entry')) {
+      // 钱包已存在，重新获取信息
+      setTimeout(() => {
+        fetchWalletInfo();
+      }, 1000);
+    } else {
+      ElMessage.error('初始化钱包失败');
+    }
+  }
+};
+
+// 加载钱包交易记录
+const loadWalletTransactions = async (reset = false) => {
+  if (reset) {
+    currentTransactionPage.value = 1;
+    walletTransactions.value = [];
+    hasMoreTransactions.value = true;
+  }
+  
+  if (!hasMoreTransactions.value) return;
+  
+  loadingTransactions.value = true;
+  
+  try {
+    const response = await getWalletTransactionsAPI(
+      currentTransactionPage.value,
+      transactionPageSize,
+      'BALANCE'
+    );
+    
+    if (response.data && response.data.code === 200) {
+      const newTransactions = response.data.data.records || [];
+      
+      if (newTransactions.length === 0 || newTransactions.length < transactionPageSize) {
+        hasMoreTransactions.value = false;
+      }
+      
+      walletTransactions.value = [...walletTransactions.value, ...newTransactions];
+      currentTransactionPage.value++;
+    } else {
+      hasMoreTransactions.value = false;
+      ElMessage.error('获取交易记录失败');
+    }
+  } catch (error) {
+    console.error('获取交易记录出错:', error);
+    hasMoreTransactions.value = false;
+    ElMessage.error('获取交易记录失败');
+  } finally {
+    loadingTransactions.value = false;
+  }
+};
+
+// 加载更多交易记录
+const loadMoreTransactions = () => {
+  loadWalletTransactions();
+};
+
+// 格式化日期
+const formatDate = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')} ${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+};
+
+// 获取交易类型名称
+const getTransactionTypeName = (type) => {
+  const typeMap = {
+    'RECHARGE': '充值',
+    'WITHDRAW': '提现',
+    'PAYMENT': '支付',
+    'REFUND': '退款',
+    'MERCHANT_INCOME': '商家收入',
+    'MERCHANT_WITHDRAW': '商家提现',
+    'PURCHASE': '购买',
+    'REWARD': '奖励',
+    'COMMISSION': '佣金',
+    'SYSTEM_ADJUSTMENT': '系统调整',
+    'CONSUMPTION': '消费',
+    'TRANSFER': '转账',
+    'DEPOSIT': '存款',
+    'INCOME': '收入',
+    'EXPENSE': '支出'
+  };
+  
+  return typeMap[type] || '其他交易';
+};
+
+// 处理充值
+const handleRecharge = async () => {
+  if (!rechargeAmount.value || parseFloat(rechargeAmount.value) <= 0) {
+    ElMessage.warning('请输入有效的充值金额');
+    return;
+  }
+  
+  try {
+    processingPayment.value = true;
+    
+    await ElMessageBox.confirm(
+      `确认充值 ¥${parseFloat(rechargeAmount.value).toFixed(2)} 到您的账户？`, 
+      '确认充值', 
+      { confirmButtonText: '确认', cancelButtonText: '取消', type: 'info' }
+    );
+    
+    try {
+      const response = await rechargeWalletAPI(parseFloat(rechargeAmount.value));
+      
+      if (response.data && response.data.code === 200) {
+        ElMessage.success('充值成功');
+        showRechargeDialog.value = false;
+        rechargeAmount.value = '';
+        
+        // 刷新钱包信息和交易记录
+        await fetchWalletInfo();
+        loadWalletTransactions(true);
+      } else {
+        ElMessage.error('充值失败: ' + (response.data?.message || '未知错误'));
+      }
+    } catch (error) {
+      console.error('充值API错误:', error);
+      ElMessage.error('充值失败: ' + (error.message || '网络错误'));
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('充值出错:', error);
+      ElMessage.error('充值失败: ' + (error.message || '网络错误'));
+    }
+  } finally {
+    processingPayment.value = false;
+  }
+};
+
+// 处理提现
+const handleWithdraw = async () => {
+  if (!withdrawAmount.value || parseFloat(withdrawAmount.value) <= 0) {
+    ElMessage.warning('请输入有效的提现金额');
+    return;
+  }
+  
+  if (parseFloat(withdrawAmount.value) > walletBalance.value) {
+    ElMessage.warning('提现金额不能超过账户余额');
+    return;
+  }
+  
+  try {
+    processingPayment.value = true;
+    
+    await ElMessageBox.confirm(
+      `确认从您的账户提现 ¥${parseFloat(withdrawAmount.value).toFixed(2)}？`, 
+      '确认提现', 
+      { confirmButtonText: '确认', cancelButtonText: '取消', type: 'warning' }
+    );
+    
+    try {
+      const response = await withdrawWalletAPI(parseFloat(withdrawAmount.value));
+      
+      if (response.data && response.data.code === 200) {
+        ElMessage.success('提现申请已提交');
+        showWithdrawDialog.value = false;
+        withdrawAmount.value = '';
+        
+        // 刷新钱包信息和交易记录
+        await fetchWalletInfo();
+        loadWalletTransactions(true);
+      } else {
+        ElMessage.error('提现失败: ' + (response.data?.message || '未知错误'));
+      }
+    } catch (error) {
+      console.error('提现API错误:', error);
+      ElMessage.error('提现失败: ' + (error.message || '网络错误'));
+    }
+  } catch (error) {
+    if (error !== 'cancel') {
+      console.error('提现出错:', error);
+      ElMessage.error('提现失败: ' + (error.message || '网络错误'));
+    }
+  } finally {
+    processingPayment.value = false;
+  }
+};
 </script>
 
 <style scoped>
@@ -902,6 +1207,71 @@ onMounted(async () => {
 .empty-document i {
   font-size: 36px;
   margin-bottom: 8px;
+}
+
+.wallet-container {
+  padding: 20px;
+}
+
+.wallet-info-card {
+  background: linear-gradient(135deg, #f6f9ff 0%, #f0f4ff 100%);
+  border-radius: 12px;
+  padding: 30px;
+  text-align: center;
+  margin-bottom: 30px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+}
+
+.balance-title {
+  color: #555;
+  font-size: 18px;
+  margin-bottom: 15px;
+}
+
+.balance-amount {
+  font-size: 32px;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 20px;
+}
+
+.balance-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+}
+
+.wallet-transactions {
+  margin-top: 30px;
+}
+
+.wallet-transactions h3 {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #333;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #eee;
+}
+
+.load-more {
+  text-align: center;
+  margin-top: 20px;
+}
+
+.no-transactions {
+  text-align: center;
+  padding: 30px;
+  color: #999;
+  font-style: italic;
+}
+
+.text-success {
+  color: #52c41a;
+}
+
+.text-danger {
+  color: #f5222d;
 }
 
 .stats-container {

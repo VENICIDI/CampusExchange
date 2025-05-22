@@ -32,7 +32,16 @@
               <div class="rating-label">商品评分:</div>
               <div class="star-rating">
                 <el-rate 
+                  v-if="productReviews[index] && productReviews[index].productReview"
                   v-model="productReviews[index].productReview.ratingScore" 
+                  :colors="['#FFCDD2', '#EF9A9A', '#E57373']" 
+                  show-text 
+                  :texts="['差评', '一般', '还不错', '满意', '非常满意']"
+                  :score-template="'{value}'">
+                </el-rate>
+                <el-rate v-else
+                  :model-value="5" 
+                  disabled
                   :colors="['#FFCDD2', '#EF9A9A', '#E57373']" 
                   show-text 
                   :texts="['差评', '一般', '还不错', '满意', '非常满意']"
@@ -43,10 +52,21 @@
             
             <div class="product-comment">
               <el-input
+                v-if="productReviews[index] && productReviews[index].productReview"
                 v-model="productReviews[index].productReview.content"
                 type="textarea"
                 :rows="3"
                 placeholder="请分享您对商品的使用感受，对其他买家帮助很大哦！"
+                maxlength="1000"
+                show-word-limit
+              ></el-input>
+              <el-input
+                v-else
+                :model-value="''"
+                disabled
+                type="textarea"
+                :rows="3"
+                placeholder="加载中..."
                 maxlength="1000"
                 show-word-limit
               ></el-input>
@@ -123,6 +143,21 @@ const merchantServiceReview = ref({
   content: ''
 });
 
+// 初始化商品评价表单 - 确保productReviews有初始值
+const initializeProductReviews = () => {
+  if (order.value && order.value.orderItems && order.value.orderItems.length > 0) {
+    productReviews.value = order.value.orderItems.map(item => ({
+      orderItemId: item.id,
+      productReview: {
+        ratingScore: 5,
+        content: ''
+      }
+    }));
+  } else {
+    productReviews.value = [];
+  }
+};
+
 // 获取订单详情
 const fetchOrderDetail = async () => {
   loading.value = true;
@@ -131,21 +166,15 @@ const fetchOrderDetail = async () => {
     if (response.data && response.data.code === 200) {
       order.value = response.data.data;
       
-      // 检查订单状态是否为已收货
-      if (order.value.status !== 'RECEIVED') {
-        ElMessage.warning('只能评价已收货的订单');
+      // 检查订单状态是否为已收货或拒绝退货状态
+      if (order.value.status !== 'RECEIVED' && order.value.status !== 'RETURN_REJECTED') {
+        ElMessage.warning('只能评价已收货或拒绝退货的订单');
         router.push(`/order/detail/${orderNo.value}`);
         return;
       }
       
       // 初始化商品评价表单
-      productReviews.value = order.value.orderItems.map(item => ({
-        orderItemId: item.id,
-        productReview: {
-          ratingScore: 5,
-          content: ''
-        }
-      }));
+      initializeProductReviews();
     } else {
       ElMessage.error('获取订单详情失败');
     }
@@ -188,7 +217,7 @@ const submitReview = async () => {
     
     if (response.data && response.data.code === 200) {
       ElMessage.success('评价提交成功');
-      router.push(`/order/detail/${orderNo.value}`);
+      router.push('/orders/user');
     } else {
       ElMessage.error(response.data?.message || '评价提交失败');
     }
@@ -202,7 +231,7 @@ const submitReview = async () => {
 
 // 返回上一页
 const goBack = () => {
-  router.back();
+  router.push('/orders/user');
 };
 
 onMounted(() => {

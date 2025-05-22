@@ -1,5 +1,5 @@
 <template>
-  <header class="floating-header" :class="{ sticky: isSticky }">
+  <header class="floating-header" :class="{ show: y > 50 }" style="border: 1px solid #e4e4e4;">
     <div class="header-container">
       <!-- logo -->
       <div class="logo">
@@ -80,11 +80,13 @@
 </template>
 
 <script setup>
+import {useScroll} from '@vueuse/core' 
 import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { productApi, cartApi } from '@/api/all'
 import logoUrl from '../assets/images/logo.png'
 
+const { y } = useScroll(window);
 const router = useRouter()
 const route = useRoute()
 const categories = ref([])
@@ -241,14 +243,14 @@ onMounted(() => {
     }
   }
   
-  // 添加滚动监听
-  const handleScroll = () => {
-    isSticky.value = window.scrollY > 100 // 滚动超过100px时激活吸顶
-    console.log('滚动位置:', window.scrollY, '吸顶状态:', isSticky.value)
-  }
+  // // 添加滚动监听
+  // const handleScroll = () => {
+  //   isSticky.value = window.scrollY > 100 // 滚动超过100px时激活吸顶
+  //   console.log('滚动位置:', window.scrollY, '吸顶状态:', isSticky.value)
+  // }
   
   // 添加事件监听
-  window.addEventListener('scroll', handleScroll)
+  // window.addEventListener('scroll', handleScroll)
   
   // 登录状态变化时刷新购物车
   window.addEventListener('storage', fetchCart)
@@ -273,7 +275,7 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.floating-header {
+/* .floating-header {
   width: 100%;
   background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,0.04);
@@ -283,15 +285,42 @@ onMounted(() => {
   margin: 0;
   padding: 0;
   border: none;
+} */
+.floating-header {
+  width: 100%;
+  height: 60px;
+  position: relative;
+  z-index: 998;
+  background-color: #fff;
+  border: 1px solid #e4e4e4;
+  box-sizing: border-box;
+  margin-top: 0;
+  transition: all 0.3s linear;
 }
 
-.floating-header.sticky {
+.floating-header::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  width: 100%;
+  height: 1px;
+  background-color: #e4e4e4;
+  z-index: 2;
+}
+
+.floating-header.show {
+  opacity: 1;
+  transform: none;
+}
+
+/* .floating-header.sticky {
   position: fixed;
   top: 0;
   left: 0;
   box-shadow: 0 4px 16px rgba(0,0,0,0.08);
   animation: slideDown 0.3s;
-}
+} */
 
 @keyframes slideDown {
   from {
@@ -309,9 +338,11 @@ onMounted(() => {
   max-width: 1240px;
   margin: 0 auto;
   padding: 0 20px;
-  height: 80px;
+  height: 60px;
   box-sizing: border-box;
   background-color: #fff;
+  position: relative;
+  z-index: 1;
 }
 
 .logo {

@@ -61,8 +61,9 @@ public class CartItemDTO {
         dto.setQuantity(cartItem.getQuantity());
         dto.setSelected(cartItem.getSelected());
         dto.setProductName(product.getName());
-        // 设置商品主图 - 此处简化处理，实际可能需要查询商品主图
-        dto.setProductImage(null);
+        // 查询商品主图 - 这需要通过ProductImageMapper来获取
+        // 直接使用当前服务器端图片API地址
+        dto.setProductImage("/api/static/products/" + product.getId() + "/main");
         dto.setPrice(product.getCurrentPrice());
         dto.setStock(product.getStock());
         dto.setInStock(product.getStock() > 0);

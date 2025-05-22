@@ -41,6 +41,9 @@ import api from './index';
  * 5. POST /api/wallet/wallet-pay - 使用钱包支付订单
  *    请求参数: { orderNo: "ORD123456", pointsUsed: 100 }
  *    响应格式: { code: 200, message: "success", data: { orderNo: "ORD123456", status: "PAID" } }
+ * 
+ * 6. POST /api/wallet/init - 初始化用户钱包
+ *    响应格式: { code: 200, message: "success", data: { balance: 0.00, frozenAmount: 0, points: 0 } }
  */
 
 /**
@@ -49,6 +52,14 @@ import api from './index';
  */
 export const getUserWalletAPI = () => {
   return api.get('/wallet/info');
+};
+
+/**
+ * 初始化用户钱包
+ * @returns {Promise} 初始化结果
+ */
+export const initUserWalletAPI = () => {
+  return api.post('/wallet/init');
 };
 
 /**
@@ -73,10 +84,11 @@ export const withdrawWalletAPI = (amount) => {
  * 获取钱包交易记录
  * @param {number} page - 页码
  * @param {number} size - 每页数量
+ * @param {string} type - 交易记录类型，可选值：BALANCE（余额）, POINTS（积分）
  * @returns {Promise} 钱包交易记录
  */
-export const getWalletTransactionsAPI = (page = 1, size = 10) => {
-  return api.get('/wallet/transactions', { params: { page, size } });
+export const getWalletTransactionsAPI = (page = 1, size = 10, type = 'BALANCE') => {
+  return api.get('/wallet/transactions', { params: { page, size, type } });
 };
 
 /**

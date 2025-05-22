@@ -99,4 +99,12 @@ public interface IProductService {
      * @return 是否成功
      */
     boolean increaseStock(Long productId, Integer quantity);
+    
+    /**
+     * 更新商品销量
+     * @param productId 商品ID
+     * @param quantity 销售数量
+     * @return 是否成功
+     */
+    boolean updateSalesCount(Long productId, Integer quantity);
 } 

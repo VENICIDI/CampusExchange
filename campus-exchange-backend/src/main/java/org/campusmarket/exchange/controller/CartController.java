@@ -124,49 +124,43 @@ public class CartController {
      * 测试请求头的API
      */
     @GetMapping("/test-headers")
-    public Result<String> testHeaders() {
-        try {
-            ServletRequestAttributes attributes = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
-            if (attributes == null) {
-                return Result.error("无法获取请求属性");
-            }
-            
-            HttpServletRequest request = attributes.getRequest();
-            
-            // 构建响应信息
-            StringBuilder info = new StringBuilder();
-            info.append("用户ID请求头: ").append(request.getHeader("X-User-Id")).append("\n");
-            info.append("用户名请求头: ").append(request.getHeader("X-User-Name")).append("\n");
-            info.append("用户角色请求头: ").append(request.getHeader("X-User-Role")).append("\n\n");
-            
-            // 列出所有请求头
-            info.append("所有请求头:\n");
-            java.util.Enumeration<String> headerNames = request.getHeaderNames();
-            while (headerNames.hasMoreElements()) {
-                String headerName = headerNames.nextElement();
-                info.append(headerName).append(": ").append(request.getHeader(headerName)).append("\n");
-            }
-            
-            // 获取认证信息
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            info.append("\n认证信息:\n");
-            if (authentication != null) {
-                info.append("已认证: ").append(authentication.isAuthenticated()).append("\n");
-                info.append("Principal类型: ").append(authentication.getPrincipal().getClass().getName()).append("\n");
-                info.append("Principal: ").append(authentication.getPrincipal()).append("\n");
-                info.append("权限: ").append(authentication.getAuthorities()).append("\n");
-            } else {
-                info.append("无认证信息\n");
-            }
-            
-            // 尝试从各种方式获取用户ID
-            Long userId = getCurrentUserId();
-            info.append("\n获取的用户ID: ").append(userId).append("\n");
-            
-            return Result.success(info.toString());
-        } catch (Exception e) {
-            return Result.error("测试请求头时出错: " + e.getMessage());
+    public Result<Map<String, String>> testHeaders(HttpServletRequest request) {
+        Map<String, String> headerMap = new java.util.HashMap<>();
+        
+        // 获取所有请求头
+        java.util.Enumeration<String> headerNames = request.getHeaderNames();
+        while (headerNames.hasMoreElements()) {
+            String name = headerNames.nextElement();
+            String value = request.getHeader(name);
+            headerMap.put(name, value);
         }
+        
+        // 输出认证信息
+        Authentication auth = SecurityContextHolder.getContext().getAuthentication();
+        if (auth != null) {
+            headerMap.put("_authenticated", String.valueOf(auth.isAuthenticated()));
+            headerMap.put("_principal", String.valueOf(auth.getPrincipal()));
+            headerMap.put("_name", auth.getName());
+        } else {
+            headerMap.put("_authenticated", "false");
+            headerMap.put("_principal", "null");
+        }
+        
+        return Result.success(headerMap);
+    }
+
+    /**
+     * 清空已选中的购物车商品
+     */
+    @DeleteMapping("/selected")
+    public Result<Boolean> clearSelectedItems() {
+        Long userId = getCurrentUserId();
+        if (userId == null) {
+            return Result.error(403, "未登录或用户信息缺失");
+        }
+        
+        boolean result = cartService.clearSelectedCartItems(userId);
+        return Result.success(result);
     }
 
     /**

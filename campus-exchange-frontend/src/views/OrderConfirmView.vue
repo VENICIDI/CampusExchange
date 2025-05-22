@@ -1,6 +1,6 @@
 <template>
   <div class="order-confirm-container">
-    <div class="container">
+    <div class="container py-4 px-md-5">
       <div class="order-title">
         <h4>确认订单</h4>
       </div>
@@ -118,7 +118,45 @@
         <!-- 商品信息 -->
         <div class="order-section product-section">
           <h5 class="section-title">商品信息</h5>
-          <div class="product-card">
+          
+          <!-- 从购物车结算时显示所有选中的商品 -->
+          <div v-if="cartItems.length > 0" class="cart-products">
+            <div v-for="item in cartItems" :key="item.id" class="product-card">
+              <div class="product-image">
+                <img :src="item.productImage || 'https://via.placeholder.com/80'" 
+                     :alt="item.productName">
+              </div>
+              <div class="product-info">
+                <h5 class="product-name">{{ item.productName }}</h5>
+                <div class="product-seller">
+                  <i class="fas fa-store-alt"></i> {{ item.merchantName }}
+                </div>
+                <div class="product-stock" :class="item.stock > 0 ? 'in-stock' : 'out-of-stock'">
+                  <i class="fas" :class="item.stock > 0 ? 'fa-check-circle' : 'fa-times-circle'"></i>
+                  {{ item.stock > 0 ? `库存充足，${item.stock}件可售` : '库存不足' }}
+                </div>
+              </div>
+              <div class="product-price-wrapper">
+                <div class="product-price">¥{{ item.price.toFixed(2) }}</div>
+                <div class="quantity-info">
+                  <span class="quantity-label">× {{ item.quantity }}</span>
+                </div>
+                <div class="item-subtotal">
+                  小计: <span class="subtotal-value">¥{{ (item.price * item.quantity).toFixed(2) }}</span>
+                </div>
+              </div>
+            </div>
+            
+            <!-- 购物车商品汇总 -->
+            <div class="cart-summary">
+              <div class="summary-info">
+                <span>共{{ cartItems.length }}种商品，合计{{ cartItems.reduce((total, item) => total + item.quantity, 0) }}件</span>
+              </div>
+            </div>
+          </div>
+          
+          <!-- 直接购买时显示单个商品 -->
+          <div v-else class="product-card">
             <div class="product-image">
               <img :src="orderPreview.productImage || 'https://via.placeholder.com/80'" 
                    :alt="orderPreview.productName">
@@ -161,10 +199,42 @@
               <span class="payment-label">运费</span>
               <span class="payment-value">¥{{ isOfflineTrade ? '0.00' : shippingFee.toFixed(2) }}</span>
             </div>
+            <!-- 添加积分抵扣选项 -->
+            <div class="payment-item points-section">
+              <span class="payment-label">
+                <span class="points-toggle" @click="usePoints = !usePoints">
+                  <span class="toggle-icon">{{ usePoints ? '✓' : '' }}</span>
+                  积分抵扣
+                </span>
+              </span>
+              <span class="payment-value" v-if="usePoints">
+                <el-slider 
+                  v-model="pointsUsed" 
+                  :min="0" 
+                  :max="maxUsablePoints" 
+                  :step="100"
+                  show-input
+                  :disabled="userPoints <= 0"
+                ></el-slider>
+                -¥{{ pointsDeduction.toFixed(2) }}
+                <span class="points-info">(使用{{ pointsUsed }}积分)</span>
+              </span>
+              <span class="payment-value" v-else>
+                <span class="points-info">{{ userPoints > 0 ? `可用${userPoints}积分` : '无可用积分' }}</span>
+              </span>
+            </div>
             <div class="payment-total">
               <span class="total-label">实付金额</span>
               <span class="total-value">¥{{ totalAmount.toFixed(2) }}</span>
             </div>
+          </div>
+        </div>
+        
+        <!-- 支付说明 -->
+        <div class="order-section note-section">
+          <div class="payment-note">
+            <i class="fas fa-info-circle"></i>
+            <span>订单创建后将进入<strong>待付款</strong>状态，您需要在订单页面完成支付</span>
           </div>
         </div>
         
@@ -194,7 +264,8 @@
 <script setup>
 import { ref, reactive, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { orderApi, userApi, productApi } from '@/api/all';
+import { orderApi, userApi, productApi, cartApi } from '@/api/all';
+import { getUserWalletAPI } from '@/api/wallet';
 import { ElMessage } from 'element-plus';
 
 const router = useRouter();
@@ -204,6 +275,8 @@ const submitting = ref(false);
 
 // 订单预览信息（从本地存储获取）
 const orderPreview = ref({});
+// 购物车商品列表
+const cartItems = ref([]);
 
 // 用户信息
 const userInfo = ref({
@@ -271,11 +344,45 @@ const offlineTradeInfo = reactive({
 const shippingFee = ref(0); // 运费
 const serviceFee = ref(0); // 平台服务费
 
+// 积分相关
+const usePoints = ref(false);
+const pointsUsed = ref(0);
+const userPoints = ref(0);
+const maxUsablePoints = computed(() => {
+  // 计算订单总金额
+  let orderAmount = 0;
+  if (cartItems.value.length > 0) {
+    // 购物车结算时计算所有商品总价
+    orderAmount = cartItems.value.reduce((total, item) => total + (item.price * item.quantity), 0);
+  } else {
+    // 直接购买时计算单个商品总价
+    orderAmount = orderPreview.value.price * quantity.value;
+  }
+  
+  // 最大可用积分：订单金额的100倍（100积分=1元）
+  const maxPoints = Math.floor(orderAmount * 100);
+  return Math.min(userPoints.value, maxPoints);
+});
+
+// 计算积分抵扣金额（100积分=1元）
+const pointsDeduction = computed(() => {
+  if (!usePoints.value || pointsUsed.value <= 0) return 0;
+  return pointsUsed.value / 100; // 100积分=1元
+});
+
 // 计算总金额
 const totalAmount = computed(() => {
-  const productTotal = orderPreview.value.price * quantity.value;
-  const shipping = isOfflineTrade.value ? 0 : shippingFee.value;
-  return productTotal + shipping;
+  // 购物车结算时，计算所有购物车商品的总价
+  if (cartItems.value.length > 0) {
+    const productTotal = cartItems.value.reduce((total, item) => total + (item.price * item.quantity), 0);
+    const shipping = isOfflineTrade.value ? 0 : shippingFee.value;
+    return productTotal + shipping - pointsDeduction.value;
+  } else {
+    // 直接购买时计算单个商品的总价
+    const productTotal = orderPreview.value.price * quantity.value;
+    const shipping = isOfflineTrade.value ? 0 : shippingFee.value;
+    return productTotal + shipping - pointsDeduction.value;
+  }
 });
 
 // 判断是否有收货地址
@@ -312,20 +419,81 @@ const formatDateTime = (dateTimeStr) => {
   return `${year}-${month}-${day} ${hours}:${minutes}:00`;
 };
 
+// 获取用户积分
+const fetchUserPoints = async () => {
+  try {
+    // 从钱包API获取积分信息
+    const response = await getUserWalletAPI();
+    if (response.data && response.data.code === 200) {
+      userPoints.value = response.data.data.points || 0;
+      console.log('获取到用户积分:', userPoints.value);
+      
+      // 默认不使用积分
+      usePoints.value = false;
+      pointsUsed.value = 0;
+    }
+  } catch (err) {
+    console.error('获取用户积分失败:', err);
+  }
+};
+
 // 加载数据
 const loadData = async () => {
   loading.value = true;
   error.value = null;
   
   try {
-    // 获取订单预览信息
+    // 判断是否从购物车来
+    const isFromCart = localStorage.getItem('orderFromCart') === 'true';
+    console.log('是否从购物车进入订单页面:', isFromCart);
+    
+    if (isFromCart) {
+      console.log('从购物车创建订单，加载购物车数据');
+      // 从购物车加载数据
+      try {
+        const response = await cartApi.getCartItems();
+        if (response.data && response.data.code === 200) {
+          // 获取已选中的购物车商品
+          cartItems.value = response.data.data.filter(item => item.selected) || [];
+          console.log('已选中的购物车商品:', cartItems.value);
+          
+          if (cartItems.value.length === 0) {
+            error.value = '购物车中没有选中的商品，请返回购物车选择商品';
+            return;
+          }
+          
+          // 初始化订单预览信息
+          const firstItem = cartItems.value[0];
+          orderPreview.value = {
+            productId: firstItem.productId,
+            productName: '购物车结算',
+            productImage: firstItem.productImage,
+            price: cartItems.value.reduce((total, item) => total + (item.price * item.quantity), 0),
+            quantity: 1, // 购物车结算时数量固定为1
+            stock: 999, // 购物车商品已经检查过库存，这里设置一个大值
+            sellerId: firstItem.merchantId,
+            sellerName: firstItem.merchantName || '多商家'
+          };
+        } else {
+          error.value = '获取购物车数据失败: ' + (response.data?.message || '未知错误');
+          return;
+        }
+      } catch (err) {
+        console.error('获取购物车数据失败:', err);
+        error.value = '获取购物车数据失败，请返回重试';
+        return;
+      }
+    } else {
     const previewData = localStorage.getItem('orderPreview');
     if (!previewData) {
+        console.error('订单信息不存在');
       error.value = '订单信息不存在，请重新选择商品';
       return;
     }
     
     orderPreview.value = JSON.parse(previewData);
+      console.log('解析的订单预览数据:', orderPreview.value);
+    }
     
     // 设置最大可购买数量
     if (orderPreview.value.stock) {
@@ -337,6 +505,14 @@ const loadData = async () => {
     } else {
       // 如果没有库存信息，尝试从后端获取最新商品信息
       try {
+        // 检查商品ID是否有效
+        if (!orderPreview.value.productId) {
+          console.error('商品ID无效:', orderPreview.value.productId);
+          error.value = '商品信息不完整，请返回商品详情页重新购买';
+          loading.value = false;
+          return;
+        }
+
         const productResponse = await productApi.getProductById(orderPreview.value.productId);
         if (productResponse.data && productResponse.data.code === 200) {
           const productData = productResponse.data.data;
@@ -350,6 +526,7 @@ const loadData = async () => {
         }
       } catch (err) {
         console.error('获取商品库存信息失败:', err);
+        error.value = '获取商品信息失败，请返回重试';
       }
     }
     
@@ -391,6 +568,9 @@ const loadData = async () => {
     // 设置费用
     shippingFee.value = 0; // 假设免运费
       
+    // 获取用户积分信息
+    await fetchUserPoints();
+    
   } catch (err) {
     console.error('加载订单数据出错:', err);
     error.value = '加载订单数据出错，请重试';
@@ -486,56 +666,99 @@ const submitOrder = async () => {
     let orderNo;
     
     if (isFromCart) {
-      // 从购物车创建订单
-      const cartOrderData = {
-        tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS',
-        pointsUsed: 0, // 暂不支持积分抵扣，设为0
-      };
+      // 从购物车创建订单 - 每个商品创建独立订单
+      if (cartItems.value.length > 0) {
+        // 准备交易信息
+        const tradeInfo = {
+          tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS',
+          pointsUsed: usePoints.value ? pointsUsed.value : 0,
+        };
       
-      // 添加线下交易信息
-      if (isOfflineTrade.value) {
-        // 验证日期格式
-        if (!validateDate(offlineTradeInfo.meetingTime)) {
-          ElMessage.error('请输入有效的交易时间（年份必须在2000-2099之间）');
-          submitting.value = false;
-          return;
+        // 添加线下交易信息
+        if (isOfflineTrade.value) {
+          // 验证日期格式
+          if (!validateDate(offlineTradeInfo.meetingTime)) {
+            ElMessage.error('请输入有效的交易时间（年份必须在2000-2099之间）');
+            submitting.value = false;
+            return;
+          }
+          tradeInfo.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
+          // 使用格式化函数处理日期
+          tradeInfo.offlineMeetingTime = formatDateTime(offlineTradeInfo.meetingTime);
+        } else {
+          // 添加收货地址信息
+          tradeInfo.address = {
+            receiverName: address.value.recipient,
+            receiverPhone: address.value.phone,
+            fullAddress: address.value.fullAddress,
+            isDefault: true
+          };
         }
-        cartOrderData.offlineMeetingLocation = offlineTradeInfo.meetingLocation;
-        // 使用格式化函数处理日期
-        cartOrderData.offlineMeetingTime = formatDateTime(offlineTradeInfo.meetingTime);
-      }
-      
-      // 调用API从购物车创建订单
-      const response = await orderApi.createOrderFromCart(cartOrderData);
-      
-      console.log('购物车创建订单完整响应:', response);
-      
-      if (response.data && response.data.code === 200) {
-        // 获取订单号列表
-        const orderNos = response.data.data;
-        console.log('购物车订单创建成功，订单号列表类型:', typeof orderNos, '值:', orderNos);
+        
+        // 创建订单
+        const orderPromises = cartItems.value.map(item => {
+          // 为每个商品创建独立订单
+          const orderData = {
+            merchantId: item.merchantId,
+            items: [{
+              productId: item.productId,
+              quantity: item.quantity
+            }],
+            ...tradeInfo // 合并交易信息
+          };
+          
+          return orderApi.createOrder(orderData);
+        });
+        
+        // 等待所有订单创建完成
+        const responses = await Promise.all(orderPromises);
+        
+        // 检查订单创建结果
+        const successOrders = responses.filter(res => res.data && res.data.code === 200);
+        const failOrders = responses.filter(res => !res.data || res.data.code !== 200);
         
         // 清除本地存储
         localStorage.removeItem('orderFromCart');
         
-        // 不管是否获取到订单号，都直接跳转到订单列表
-        ElMessage.success('订单创建成功');
+        if (successOrders.length > 0) {
+          // 有订单创建成功，清空购物车中已选中的商品
+          try {
+            await cartApi.clearSelectedItems();
+            console.log('已清空购物车中已结算的商品');
+          } catch (err) {
+            console.error('清空购物车已选商品失败:', err);
+          }
+          
+          // 提示订单创建结果
+          if (failOrders.length > 0) {
+            // 部分成功部分失败
+            ElMessage.warning(`成功创建${successOrders.length}个订单，${failOrders.length}个订单创建失败`);
+          } else {
+            // 全部成功
+            ElMessage.success(`成功创建${successOrders.length}个订单`);
+          }
+          
+          // 跳转到订单列表
         setTimeout(() => {
           router.push('/orders/user');
         }, 500);
       } else {
-        ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
+          // 全部失败
+          ElMessage.error('创建订单失败，请重试');
+        }
+      } else {
+        ElMessage.error('购物车中没有选中的商品');
       }
     } else {
       // 直接创建订单
-      // 构建订单数据
       const orderData = {
-        merchantId: orderPreview.value.sellerId, // 商家ID
+        merchantId: orderPreview.value.sellerId,
         items: [{
           productId: orderPreview.value.productId,
-          quantity: quantity.value // 使用用户选择的数量
+          quantity: quantity.value
         }],
-        tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS'
+        tradeType: isOfflineTrade.value ? 'OFFLINE' : 'EXPRESS',
+        pointsUsed: usePoints.value ? pointsUsed.value : 0 // 添加积分抵扣
       };
       
       // 添加收货地址或线下交易信息
@@ -567,6 +790,15 @@ const submitOrder = async () => {
         // 获取订单号
         orderNo = response.data.data;
         console.log('订单创建成功，订单号类型:', typeof orderNo, '值:', orderNo);
+        
+        // 尝试清空购物车中可能存在的已选商品
+        try {
+          await cartApi.clearSelectedItems();
+          console.log('已清空购物车中可能选择的商品');
+        } catch (err) {
+          console.error('清空购物车操作失败:', err);
+          // 不影响主流程继续
+        }
         
         // 清除本地存储的订单预览
         localStorage.removeItem('orderPreview');
@@ -601,14 +833,18 @@ onMounted(() => {
 
 <style scoped>
 .order-confirm-container {
-  min-height: 80vh;
-  background-color: #f5f5f5;
-  padding: 20px 0;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+  padding: 0 15px;
 }
 
 .container {
-  max-width: 1000px;
+  max-width: 1200px;
   margin: 0 auto;
+  background-color: #fff;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  padding: 20px;
 }
 
 .order-title {
@@ -994,12 +1230,9 @@ onMounted(() => {
 }
 
 .payment-total {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid #e8e8e8;
-  font-size: 16px;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed #eee;
   font-weight: 600;
 }
 
@@ -1091,6 +1324,14 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
+  .order-confirm-container {
+    padding: 0 10px;
+  }
+  
+  .container {
+    padding: 15px;
+  }
+  
   .form-row {
     flex-direction: column;
     gap: 0;
@@ -1120,5 +1361,96 @@ onMounted(() => {
 
 .out-of-stock {
   color: #f5222d;
+}
+
+.points-section {
+  margin-top: 5px;
+  padding: 8px 0;
+  border-top: 1px dashed #eee;
+}
+
+.points-toggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  border: 1px solid #4a6ee0;
+  border-radius: 3px;
+  color: white;
+  background-color: #4a6ee0;
+  font-size: 12px;
+}
+
+.points-info {
+  font-size: 12px;
+  color: #888;
+  margin-left: 5px;
+}
+
+.payment-note {
+  display: flex;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #f9f9f9;
+  border-radius: 4px;
+  color: #666;
+  font-size: 14px;
+}
+
+.payment-note i {
+  color: #faad14;
+  margin-right: 8px;
+  font-size: 16px;
+}
+
+/* 购物车商品样式 */
+.cart-products {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.cart-products .product-card {
+  border-bottom: 1px solid #f0f0f0;
+  padding: 16px;
+}
+
+.cart-products .product-card:last-child {
+  border-bottom: none;
+}
+
+.quantity-info {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 5px;
+}
+
+.item-subtotal {
+  font-size: 14px;
+  color: #666;
+}
+
+.subtotal-value {
+  color: #e74c3c;
+  font-weight: 500;
+}
+
+.cart-summary {
+  padding: 12px 16px;
+  background-color: #f9f9f9;
+  border-top: 1px solid #f0f0f0;
+  text-align: right;
+  color: #333;
+  font-size: 14px;
+  font-weight: 500;
 }
 </style> 

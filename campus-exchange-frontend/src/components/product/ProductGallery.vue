@@ -1,27 +1,12 @@
 <template>
   <div class="product-gallery-container">
     <!-- 主图区域 -->
-    <div class="main-image">
+    <div class="product-image">
       <img 
         :src="processedMainImageUrl" 
         :alt="altText"
         @error="handleImageError"
       />
-    </div>
-    
-    <!-- 所有图片展示（商品详情中使用） -->
-    <div v-if="showAllImages && processedImages.length > 0" class="product-images-gallery">
-      <h3>商品图片</h3>
-      <div class="gallery-grid">
-        <div 
-          v-for="(image, index) in processedImages" 
-          :key="index" 
-          class="gallery-image-item"
-          @click="$emit('select-image', index)"
-        >
-          <img :src="image.url" :alt="`${altText} - ${index + 1}`" @error="(e) => handleGalleryImageError(e, index)" />
-        </div>
-      </div>
     </div>
   </div>
 </template>
@@ -161,63 +146,35 @@ const processGalleryImageUrl = (url, index) => {
 .product-gallery-container {
   display: flex;
   flex-direction: column;
+  gap: 30px;
 }
 
-.main-image {
-  height: 400px;
+.product-image {
+  height: 450px;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+  box-shadow: 0 6px 20px rgba(0,0,0,0.1);
+  background-color: #fff;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
 
-.main-image img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  background-color: #f9f9f9;
-  transition: transform 0.3s ease;
-}
-
-.main-image:hover img {
-  transform: scale(1.02);
-}
-
-.product-images-gallery {
-  margin-top: 30px;
-}
-
-.product-images-gallery h3 {
-  font-size: 1.2rem;
-  margin: 25px 0 15px;
-  color: #333;
-  padding-left: 12px;
-  border-left: 3px solid #4a6ee0;
-}
-
-.gallery-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 20px;
-  margin-top: 20px;
-}
-
-.gallery-image-item {
-  border-radius: 8px;
-  overflow: hidden;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-  transition: all 0.3s ease;
-  height: 200px;
-  cursor: pointer;
-}
-
-.gallery-image-item:hover {
+.product-image:hover {
   transform: translateY(-5px);
-  box-shadow: 0 8px 15px rgba(0,0,0,0.15);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.15);
 }
 
-.gallery-image-item img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
+.product-image img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  transition: transform 0.4s ease;
+}
+
+.product-image:hover img {
+  transform: scale(1.05);
 }
 </style> 

@@ -16,6 +16,16 @@ service.interceptors.request.use(
     if (token) {
       config.headers['Authorization'] = `Bearer ${token}`;
     }
+    
+    // 添加调试日志
+    console.log(`[请求] ${config.method.toUpperCase()} ${config.url}`, {
+      url: config.url,
+      method: config.method,
+      data: config.data,
+      params: config.params,
+      headers: config.headers
+    });
+    
     return config;
   },
   error => {
@@ -28,6 +38,12 @@ service.interceptors.request.use(
 service.interceptors.response.use(
   response => {
     const res = response.data;
+    
+    // 添加调试日志
+    console.log(`[响应] ${response.config.method.toUpperCase()} ${response.config.url}`, {
+      status: response.status,
+      data: res,
+    });
     
     // 如果是文件下载直接返回
     if (response.config.responseType === 'blob') {

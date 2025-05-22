@@ -121,6 +121,23 @@ const merchant = ref(null);
 const isLoadingMerchant = ref(false);
 const serviceRating = ref(0);
 
+// 格式化好评率（处理百分比显示问题）
+const formatRating = (rate) => {
+  if (rate === null || rate === undefined) return 100.0;
+  
+  // 如果rate已经是0-1之间的小数，直接格式化
+  if (rate >= 0 && rate <= 1) {
+    return (rate * 100).toFixed(1);
+  }
+  
+  // 如果rate已经是百分比形式（例如80而不是0.8）
+  if (rate > 1) {
+    return rate.toFixed(1);
+  }
+  
+  return 100.0;
+};
+
 // 商家等级名称
 const merchantLevelName = computed(() => {
   if (!merchant.value || !merchant.value.levelId) return '普通商家';
@@ -164,8 +181,8 @@ const fetchMerchantInfo = async (userId) => {
         // 使用API返回的商家名称
         storeName.value = merchant.value.storeName || user.value.username + "的店铺";
         
-        // 设置商家评分
-        rating.value = merchant.value.storePositiveRate || 100;
+        // 设置商家评分，使用formatRating处理
+        rating.value = formatRating(merchant.value.storePositiveRate || 1);
         
         // 保存商家ID到localStorage
         if (merchant.value.id) {

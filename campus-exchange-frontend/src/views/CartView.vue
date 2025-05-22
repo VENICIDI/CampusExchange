@@ -1,10 +1,16 @@
 <template>
   <div class="cart-container">
-    <div class="container py-5">
-      <h2 class="mb-4">我的购物车</h2>
+    <div class="cart-header">
+      <h2>我的购物车</h2>
+      <div class="cart-actions">
+        <router-link to="/" class="btn-secondary">
+          <i class="fas fa-arrow-left me-1"></i> 继续购物
+        </router-link>
+      </div>
+    </div>
       
       <!-- 加载中状态 -->
-      <div v-if="loading" class="text-center py-5">
+    <div v-if="loading" class="text-center py-3">
         <div class="spinner-border text-primary" role="status">
           <span class="visually-hidden">加载中...</span>
         </div>
@@ -12,7 +18,7 @@
       </div>
       
       <!-- 空购物车状态 -->
-      <div v-else-if="!cartItems.length" class="text-center py-5">
+    <div v-else-if="!cartItems.length" class="empty-cart">
         <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
         <h4>购物车空空如也</h4>
         <p class="text-muted">快去选购心仪的商品吧</p>
@@ -23,76 +29,81 @@
       
       <!-- 购物车内容 -->
       <div v-else class="cart-content">
-        <!-- 商品列表 -->
-        <div class="card mb-4">
-          <div class="card-header d-flex justify-content-between align-items-center">
+      <!-- 购物车表格 -->
+      <div class="cart-table">
+        <div class="cart-table-header">
+          <div class="table-cell checkbox-cell">
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="selectAll" 
                      v-model="selectAll" @change="toggleSelectAll">
-              <label class="form-check-label fw-bold" for="selectAll">全选</label>
+              <label class="form-check-label" for="selectAll">全选</label>
             </div>
-            <div class="cart-header-info">
-              <span class="text-muted me-3">单价</span>
-              <span class="text-muted me-3">数量</span>
-              <span class="text-muted me-3">小计</span>
-              <span class="text-muted">操作</span>
-            </div>
+          </div>
+          <div class="table-cell product-cell">商品信息</div>
+          <div class="table-cell price-cell">单价</div>
+          <div class="table-cell quantity-cell">数量</div>
+          <div class="table-cell subtotal-cell">小计</div>
+          <div class="table-cell action-cell">操作</div>
           </div>
           
           <!-- 按商家分组显示 -->
-          <div v-for="(group, merchantId) in groupedCartItems" :key="merchantId" class="merchant-group pb-3">
-            <div class="merchant-header p-3 border-bottom bg-light">
-              <div class="form-check">
-                <input class="form-check-input" type="checkbox" 
-                       :id="'merchant-' + merchantId"
-                       v-model="merchantSelected[merchantId]"
-                       @change="toggleMerchantItems(merchantId)">
-                <label class="form-check-label" :for="'merchant-' + merchantId">
+        <div v-for="(group, merchantId) in groupedCartItems" :key="merchantId" class="merchant-group">
+          <div class="merchant-header">
+            <div class="shop-title">
                   <i class="fas fa-store me-2"></i>{{ group.merchantName || '未知商家' }}
-                </label>
               </div>
             </div>
             
+          <div class="shop-items-container">
             <!-- 该商家的商品 -->
-            <div v-for="item in group.items" :key="item.id" class="cart-item p-3 border-bottom">
-              <div class="row align-items-center">
-                <div class="col-md-6 d-flex align-items-center">
-                  <div class="form-check me-3">
+            <div v-for="item in group.items" :key="item.id" class="cart-table-row">
+              <div class="table-cell checkbox-cell">
+                <div class="form-check">
                     <input class="form-check-input" type="checkbox" 
                            :id="'item-' + item.id"
                            v-model="item.selected"
                            @change="updateItemSelected(item)">
-                    <label class="form-check-label" :for="'item-' + item.id"></label>
+                </div>
                   </div>
-                  <div class="product-info d-flex align-items-center">
-                    <img :src="item.productImage || 'https://via.placeholder.com/80/e0e0e0/666666?text=商品图片'" class="product-image me-3" :alt="item.productName">
-                    <div>
+              
+              <div class="table-cell product-cell">
+                <div class="product-info">
+                  <img :src="item.productImage || '/images/default-product.png'" class="product-image" :alt="item.productName" @error="handleImageError">
+                  <div class="product-details">
                       <div class="product-name">{{ item.productName }}</div>
                       <div class="text-muted small" v-if="!item.inStock">
-                        <span class="text-danger">库存不足</span>
-                      </div>
+                      <span class="stock-warning">库存不足</span>
                     </div>
                   </div>
                 </div>
-                <div class="col-md-6 d-flex align-items-center justify-content-between">
-                  <div class="product-price">¥{{ item.price }}</div>
+              </div>
+              
+              <div class="table-cell price-cell">
+                <span class="product-price">¥{{ item.price }}</span>
+              </div>
+              
+              <div class="table-cell quantity-cell">
                   <div class="quantity-control">
-                    <button class="btn btn-sm btn-outline-secondary" 
+                  <button class="btn-quantity decrease" 
                             @click="decreaseQuantity(item)"
                             :disabled="item.quantity <= 1">-</button>
                     <input type="number" min="1" v-model.number="item.quantity" 
-                           class="form-control quantity-input"
+                         class="quantity-input"
                            @change="updateQuantity(item)">
-                    <button class="btn btn-sm btn-outline-secondary" 
+                  <button class="btn-quantity increase" 
                             @click="increaseQuantity(item)"
                             :disabled="item.quantity >= item.stock">+</button>
                   </div>
-                  <div class="product-subtotal text-danger fw-bold">¥{{ (item.price * item.quantity).toFixed(2) }}</div>
-                  <div class="product-actions">
-                    <button class="btn btn-link text-danger" @click="removeItem(item)">
-                      <i class="fas fa-trash"></i>
+              </div>
+              
+              <div class="table-cell subtotal-cell">
+                <span class="product-subtotal">¥{{ (item.price * item.quantity).toFixed(2) }}</span>
+              </div>
+              
+              <div class="table-cell action-cell">
+                <button class="btn-remove" @click="removeItem(item)">
+                  <i class="fas fa-trash-alt"></i> 删除
                     </button>
-                  </div>
                 </div>
               </div>
             </div>
@@ -100,19 +111,18 @@
         </div>
         
         <!-- 结算栏 -->
-        <div class="card checkout-bar">
-          <div class="card-body d-flex justify-content-between align-items-center">
-            <div class="checkout-info">
-              <span class="me-4">已选商品 <strong>{{ selectedCount }}</strong> 件</span>
-              <span>合计：<strong class="text-danger fs-4">¥{{ totalPrice.toFixed(2) }}</strong></span>
+      <div class="checkout-bar">
+        <div class="selected-info">
+          <span class="me-3">已选商品 <strong>{{ selectedCount }}</strong> 件</span>
+        </div>
+        <div class="price-info">
+          <span>合计：<strong class="total-price">¥{{ totalPrice.toFixed(2) }}</strong></span>
             </div>
-            <button class="btn btn-danger btn-lg" 
+        <button class="btn-checkout" 
                     @click="checkout" 
                     :disabled="selectedCount === 0">
               结算
             </button>
-          </div>
-        </div>
       </div>
     </div>
   </div>
@@ -123,6 +133,7 @@ import { ref, computed, reactive, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { cartApi } from '@/api/cart';
+import { orderApi } from '@/api/all';
 
 const router = useRouter();
 const loading = ref(true);
@@ -336,26 +347,72 @@ const removeItem = async (item) => {
   }
 };
 
+// 图片加载失败处理
+const handleImageError = (event) => {  
+  event.target.src = 'https://via.placeholder.com/80/e0e0e0/666666?text=商品图片';
+};
+
 // 结算
-const checkout = () => {
+const checkout = async () => {  
+  console.log('开始结算流程...');
   // 检查是否有选中的商品
   if (selectedCount.value === 0) {
+    console.log('没有选中商品，无法结算');
     ElMessage.warning('请选择要结算的商品');
     return;
   }
   
   // 检查是否有库存不足的商品
-  const invalidItems = cartItems.value.filter(item => item.selected && !item.inStock);
+  const invalidItems = cartItems.value.filter(item => item.selected && (item.quantity > item.stock || item.stock <= 0));
+  console.log('库存不足的商品数量:', invalidItems.length);
   if (invalidItems.length > 0) {
+    console.log('库存不足的商品:', invalidItems);
     ElMessage.error('部分商品库存不足，请修改数量或取消选择');
     return;
   }
   
-  // 标记为从购物车创建订单
+  try {
+    // 设置标志，从购物车创建订单
   localStorage.setItem('orderFromCart', 'true');
   
   // 跳转到订单确认页面
   router.push('/order/confirm');
+    
+    // 以下代码移动到订单确认页面
+    /*
+    // 直接从购物车创建订单
+    console.log('直接从购物车创建订单');
+    ElMessage.info('正在创建订单...');
+    
+    // 构建订单数据
+    const cartOrderData = {
+      tradeType: 'EXPRESS', // 默认使用快递配送
+      pointsUsed: 0 // 暂不支持积分抵扣
+    };
+    
+    // 调用API从购物车创建订单
+    const response = await orderApi.createOrderFromCart(cartOrderData);
+    
+    console.log('购物车创建订单响应:', response);
+    
+    if (response.data && response.data.code === 200) {
+      // 获取订单号列表
+      const orderNos = response.data.data;
+      console.log('订单创建成功，订单号列表:', orderNos);
+      
+      ElMessage.success('订单创建成功');
+      // 跳转到订单列表页面
+      setTimeout(() => {
+        router.push('/orders/user');
+      }, 500);
+    } else {
+      ElMessage.error('创建订单失败：' + (response.data?.message || '未知错误'));
+    }
+    */
+  } catch (err) {
+    console.error('提交订单出错:', err);
+    ElMessage.error('提交订单失败：' + (err.message || '网络错误'));
+  }
 };
 
 // 工具函数：按属性分组
@@ -377,137 +434,354 @@ onMounted(() => {
 .cart-container {
   min-height: 90vh;
   background-color: #f8f9fa;
-  padding: 20px 0;
-}
-
-.cart-content {
-  max-width: 1000px;
+  padding: 20px 30px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-.card {
+.cart-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e4e4e4;
+  padding-bottom: 15px;
+}
+
+.cart-header h2 {
+  font-size: 24px;
+  color: #333;
+  margin: 0;
+}
+
+.cart-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.btn-secondary {
+  padding: 8px 16px;
+  background-color: #f0f0f0;
+  color: #333;
   border: none;
-  box-shadow: 0 2px 12px rgba(0,0,0,0.08);
-  border-radius: 12px;
+  border-radius: 4px;
+  text-decoration: none;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+  background-color: #e4e4e4;
+}
+
+.empty-cart {
+  text-align: center;
+  padding: 60px 0;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-top: 20px;
+}
+
+.cart-table {
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+
+.cart-table-header {
+  display: flex;
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: bold;
+  padding: 15px 10px;
+  border-bottom: 1px solid #e4e4e4;
+}
+
+.table-cell {
+  padding: 0 10px;
+  display: flex;
+  align-items: center;
+}
+
+.checkbox-cell {
+  width: 5%;
+  justify-content: center;
+}
+
+.product-cell {
+  width: 40%;
+}
+
+.price-cell {
+  width: 15%;
+  justify-content: center;
+}
+
+.quantity-cell {
+  width: 15%;
+  justify-content: center;
+}
+
+.subtotal-cell {
+  width: 15%;
+  justify-content: center;
+}
+
+.action-cell {
+  width: 10%;
+  justify-content: center;
+}
+
+.merchant-group {
+  margin-bottom: 15px;
+  border: 1px solid #e4e4e4;
+  border-radius: 4px;
   overflow: hidden;
 }
 
-.card-header {
-  background-color: white;
-  border-bottom: 1px solid rgba(0,0,0,0.1);
-  padding: 1rem;
-}
-
-.cart-header-info {
-  width: 50%;
-  display: flex;
-  justify-content: space-between;
-}
-
 .merchant-header {
-  background-color: #f8f9fa;
-  transition: all 0.2s ease;
+  padding: 12px 15px;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #e4e4e4;
+  font-weight: 500;
+  color: #333;
+  position: relative;
 }
 
-.merchant-header:hover {
-  background-color: #f0f4ff;
+.shop-title {
+  display: flex;
+  align-items: center;
+  font-weight: 600;
+  color: #303133;
+  font-size: 15px;
+}
+
+.shop-title i {
+  color: #4a6ee0;
+}
+
+.shop-items-container {
+  background-color: #ffffff;
+}
+
+.cart-table-row {
+  display: flex;
+  padding: 15px 10px;
+  border-bottom: 1px solid #e4e4e4;
+  transition: background-color 0.2s;
+}
+
+.cart-table-row:hover {
+  background-color: #f9f9f9;
+}
+
+.cart-table-row:last-child {
+  border-bottom: none;
+}
+
+.product-info {
+  display: flex;
+  align-items: center;
 }
 
 .product-image {
   width: 80px;
   height: 80px;
   object-fit: cover;
-  border-radius: 8px;
+  border-radius: 4px;
   border: 1px solid #eee;
-  box-shadow: 0 2px 5px rgba(0,0,0,0.05);
-  transition: all 0.3s ease;
+  margin-right: 15px;
 }
 
-.product-image:hover {
-  transform: scale(1.05);
-  box-shadow: 0 3px 8px rgba(0,0,0,0.1);
+.product-details {
+  flex: 1;
 }
 
 .product-name {
   font-weight: 600;
   color: #333;
-  margin-bottom: 4px;
+  margin-bottom: 5px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stock-warning {
+  color: #f56c6c;
+  font-size: 12px;
+  background-color: #fef0f0;
+  padding: 2px 6px;
+  border-radius: 2px;
+}
+
+.product-price {
+  color: #606266;
+  font-weight: 500;
 }
 
 .quantity-control {
   display: flex;
   align-items: center;
-  border: 1px solid #dee2e6;
-  border-radius: 6px;
-  overflow: hidden;
+  border: 1px solid #dcdfe6;
+  border-radius: 4px;
+  width: 120px;
 }
 
-.quantity-control button {
+.btn-quantity {
+  width: 36px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f5f7fa;
   border: none;
-  background-color: #f8f9fa;
-  padding: 5px 12px;
-  font-weight: bold;
-  transition: all 0.2s;
+  cursor: pointer;
+  user-select: none;
 }
 
-.quantity-control button:hover {
-  background-color: #e9ecef;
+.btn-quantity:hover {
+  background: #e4e7ed;
+}
+
+.btn-quantity:disabled {
+  color: #c0c4cc;
+  cursor: not-allowed;
 }
 
 .quantity-input {
-  width: 50px;
+  width: 48px;
+  height: 32px;
   text-align: center;
   border: none;
-  border-left: 1px solid #dee2e6;
-  border-right: 1px solid #dee2e6;
-  padding: 5px 0;
-}
-
-.product-price, .product-subtotal {
-  font-weight: 600;
+  border-left: 1px solid #dcdfe6;
+  border-right: 1px solid #dcdfe6;
+  outline: none;
 }
 
 .product-subtotal {
-  color: #dc3545;
+  color: #f56c6c;
+  font-weight: 600;
+}
+
+.btn-remove {
+  color: #909399;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px 10px;
+  transition: all 0.2s;
+}
+
+.btn-remove:hover {
+  color: #f56c6c;
 }
 
 .checkout-bar {
+  background-color: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
   position: sticky;
   bottom: 20px;
-  z-index: 100;
-  box-shadow: 0 -2px 10px rgba(0,0,0,0.1);
-  border-radius: 12px;
-  transition: all 0.3s ease;
 }
 
-.checkout-bar:hover {
-  box-shadow: 0 -4px 15px rgba(0,0,0,0.15);
+.selected-info {
+  margin-right: 20px;
+  color: #606266;
 }
 
-.btn-danger {
-  background-color: #ff4757;
-  border-color: #ff4757;
-  transition: all 0.3s ease;
+.price-info {
+  margin-right: 20px;
+  color: #606266;
+}
+
+.total-price {
+  font-size: 20px;
+  color: #f56c6c;
+}
+
+.btn-checkout {
+  background-color: #f56c6c;
+  color: white;
+  border: none;
   padding: 10px 25px;
+  border-radius: 4px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.btn-danger:hover {
-  background-color: #f03a47;
-  border-color: #f03a47;
-  transform: translateY(-2px);
-  box-shadow: 0 5px 10px rgba(255, 71, 87, 0.3);
+.btn-checkout:hover {
+  background-color: #f78989;
 }
 
-.cart-item {
-  transition: background-color 0.2s;
-}
-
-.cart-item:hover {
-  background-color: #f8faff;
+.btn-checkout:disabled {
+  background-color: #fab6b6;
+  cursor: not-allowed;
 }
 
 .form-check-input:checked {
-  background-color: #4a6ee0;
-  border-color: #4a6ee0;
+  background-color: #409eff;
+  border-color: #409eff;
+}
+
+/* 响应式调整 */
+@media (max-width: 768px) {
+  .cart-container {
+    padding: 15px;
+  }
+  
+  .cart-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  
+  .cart-table-header {
+    display: none;
+  }
+  
+  .cart-table-row {
+    flex-wrap: wrap;
+    padding: 10px;
+  }
+  
+  .table-cell {
+    padding: 5px;
+  }
+  
+  .checkbox-cell {
+    width: 10%;
+  }
+  
+  .product-cell {
+    width: 90%;
+  }
+  
+  .price-cell, .quantity-cell, .subtotal-cell, .action-cell {
+    width: 50%;
+    justify-content: flex-start;
+    margin-top: 10px;
+  }
+  
+  .product-image {
+    width: 60px;
+    height: 60px;
+  }
+  
+  .checkout-bar {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-end;
+  }
 }
 </style> 

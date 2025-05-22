@@ -2,7 +2,9 @@ package org.campusmarket.exchange.controller;
 
 import jakarta.annotation.Resource;
 import lombok.Data;
+import org.campusmarket.exchange.dto.PointsTransactionDTO;
 import org.campusmarket.exchange.dto.Result;
+import org.campusmarket.exchange.dto.WalletTransactionDTO;
 import org.campusmarket.exchange.entity.PointsAccount;
 import org.campusmarket.exchange.entity.PointsTransaction;
 import org.campusmarket.exchange.entity.Wallet;
@@ -21,6 +23,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 钱包控制器
@@ -134,11 +137,16 @@ public class WalletController {
         Map<String, Object> result = new HashMap<>();
         
         // 如果指定了类型为积分，则返回积分交易记录
-        if ("points".equals(type)) {
+        if ("POINTS".equalsIgnoreCase(type)) {
             List<PointsTransaction> transactions = pointsService.getPointsTransactionsByUserId(userId, page, size);
+            // 将实体类转换为DTO
+            List<PointsTransactionDTO> transactionDTOs = transactions.stream()
+                    .map(PointsTransactionDTO::fromEntity)
+                    .collect(Collectors.toList());
+            
             int total = pointsService.countPointsTransactionsByUserId(userId);
             
-            result.put("records", transactions);
+            result.put("records", transactionDTOs);
             result.put("total", total);
             result.put("pages", (total + size - 1) / size);
             result.put("current", page);
@@ -146,9 +154,14 @@ public class WalletController {
         } else {
             // 否则返回钱包交易记录
             List<WalletTransaction> transactions = walletService.getTransactionsByUserId(userId, page, size);
+            // 将实体类转换为DTO
+            List<WalletTransactionDTO> transactionDTOs = transactions.stream()
+                    .map(WalletTransactionDTO::fromEntity)
+                    .collect(Collectors.toList());
+            
             int total = walletService.countTransactionsByUserId(userId);
             
-            result.put("records", transactions);
+            result.put("records", transactionDTOs);
             result.put("total", total);
             result.put("pages", (total + size - 1) / size);
             result.put("current", page);

@@ -12,15 +12,20 @@ import org.campusmarket.exchange.entity.*;
 import org.campusmarket.exchange.enums.OrderStatusEnum;
 import org.campusmarket.exchange.enums.ReviewStatusEnum;
 import org.campusmarket.exchange.enums.TradeTypeEnum;
+import org.campusmarket.exchange.enums.PointsTransactionTypeEnum;
+import org.campusmarket.exchange.enums.ReturnStatusEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.*;
 import org.campusmarket.exchange.service.IOrderService;
 import org.campusmarket.exchange.service.IProductService;
 import org.campusmarket.exchange.service.ICartService;
+import org.campusmarket.exchange.service.IPointsService;
+import org.campusmarket.exchange.service.IWalletService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -68,6 +73,15 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
 
     @Resource
     private BuyerReviewByMerchantMapper buyerReviewByMerchantMapper;
+    
+    @Resource
+    private IPointsService pointsService;
+
+    @Resource
+    private IWalletService walletService;
+    
+    @Resource
+    private ReturnRequestMapper returnRequestMapper;
 
     /**
      * 创建订单
@@ -644,6 +658,28 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             }
         }
         
+        // 7. 查询退货申请信息
+        if (order.getStatus() == OrderStatusEnum.RETURN_REQUESTED 
+                || order.getStatus() == OrderStatusEnum.RETURN_APPROVED
+                || order.getStatus() == OrderStatusEnum.RETURN_GOODS_RECEIVED
+                || order.getStatus() == OrderStatusEnum.RETURNED
+                || order.getStatus() == OrderStatusEnum.RETURN_REJECTED) {
+            
+            LambdaQueryWrapper<ReturnRequest> returnQueryWrapper = Wrappers.<ReturnRequest>lambdaQuery()
+                    .eq(ReturnRequest::getOrderId, order.getId());
+            ReturnRequest returnRequest = returnRequestMapper.selectOne(returnQueryWrapper);
+            
+            if (returnRequest != null) {
+                OrderDetailVO.ReturnRequestInfo returnInfo = new OrderDetailVO.ReturnRequestInfo();
+                returnInfo.setReason(returnRequest.getReason());
+                returnInfo.setRejectionReason(returnRequest.getRejectionReason());
+                returnInfo.setApplicationTime(returnRequest.getApplicationTime());
+                returnInfo.setStatus(returnRequest.getStatus().name());
+                
+                detailVO.setReturnRequestInfo(returnInfo);
+            }
+        }
+        
         return detailVO;
     }
 
@@ -780,11 +816,11 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             return false;
         }
         
-        // 检查是否已超过24小时
+        // 检查是否已超过30分钟
         LocalDateTime createTime = order.getCreateTime();
         LocalDateTime now = LocalDateTime.now();
-        if (createTime.plusHours(24).isAfter(now)) {
-            log.warn("订单创建时间不足24小时，不执行自动取消");
+        if (createTime.plusMinutes(30).isAfter(now)) {
+            log.warn("订单创建时间不足30分钟，不执行自动取消");
             return false;
         }
         
@@ -796,7 +832,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         updateById(updateOrder);
         
         // 记录日志，记录取消原因而不存入数据库
-        log.info("系统自动取消订单[{}]，原因：超过24小时未支付", orderNo);
+        log.info("系统自动取消订单[{}]，原因：超过30分钟未支付", orderNo);
         
         // 恢复商品库存
         // 查询订单商品
@@ -845,6 +881,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
+        // 给用户奖励积分（每消费1元获得1积分）
+        awardPointsForPurchase(order);
+        
+        // 更新商品销量
+        updateProductSalesCount(order.getId());
+        
         log.info("订单支付成功");
         return true;
     }
@@ -883,7 +925,10 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
-        log.info("确认收货成功");
+        // 注意：确认收货时不进行转账，订单完成状态(COMPLETED)时才转账
+        // 确认收货只改变订单状态为RECEIVED，资金不变动
+        log.info("确认收货成功，订单状态已更新为已收货，等待评价或自动完成后将款项转入商家账户");
+        
         return true;
     }
 
@@ -946,7 +991,8 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         // 2. 校验订单状态
         if (order.getStatus() != OrderStatusEnum.PENDING_SHIPMENT && 
-            order.getStatus() != OrderStatusEnum.SHIPPED) {
+            order.getStatus() != OrderStatusEnum.SHIPPED &&
+            order.getStatus() != OrderStatusEnum.RECEIVED) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
                     "只能申请退款/退货已付款但未完成的订单，当前状态: " + order.getStatus().getDesc());
         }
@@ -958,6 +1004,18 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);
+        
+        // 4. 创建退货申请记录
+        ReturnRequest returnRequest = new ReturnRequest();
+        returnRequest.setOrderId(order.getId());
+        returnRequest.setUserId(userId);
+        returnRequest.setMerchantId(order.getMerchantId());
+        returnRequest.setReason(reason);
+        returnRequest.setStatus(ReturnStatusEnum.PENDING_APPROVAL);
+        returnRequest.setApplicationTime(LocalDateTime.now());
+        returnRequest.setUpdateTime(LocalDateTime.now());
+        
+        returnRequestMapper.insert(returnRequest);
         
         log.info("申请退款/退货成功");
         return true;
@@ -996,16 +1054,80 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         if (approve) {
             // 同意退款
             if (TradeTypeEnum.EXPRESS.getCode().equals(order.getTradeType()) && 
-                order.getStatus() == OrderStatusEnum.SHIPPED) {
+                OrderStatusEnum.SHIPPED.equals(order.getStatus())) {
                 // 如果是快递交易且已发货，则需要退货
                 newStatus = OrderStatusEnum.RETURN_APPROVED;
             } else {
                 // 否则直接退款
                 newStatus = OrderStatusEnum.RETURNED;
+                
+                // 处理直接退款的逻辑
+                if (walletService != null) {
+                    // 先检查买家用户ID是否存在
+                    User buyer = userMapper.selectById(order.getUserId());
+                    if (buyer == null) {
+                        log.error("找不到买家信息，无法退款，买家ID: {}", order.getUserId());
+                        throw new BusinessException(HttpStatus.NOT_FOUND.value(), "买家信息不存在");
+                    }
+                    
+                    // 返还用户支付金额
+                    walletService.refundToBuyer(
+                        order.getUserId(),
+                        order.getId(),
+                        order.getOrderNo(),
+                        order.getActualPaymentAmount()
+                    );
+                    
+                    log.info("已将订单金额{}退还给用户[{}]", 
+                        order.getActualPaymentAmount(), order.getUserId());
+                    
+                    // 如果用户使用了积分，也需要退还
+                    if (order.getPointsUsed() > 0) {
+                        pointsService.addPoints(
+                            order.getUserId(),
+                            order.getPointsUsed(),
+                            PointsTransactionTypeEnum.REFUND_RETURNED,
+                            "订单退款返还积分: " + orderNo,
+                            order.getId()
+                        );
+                        log.info("已将订单使用的积分{}退还给用户[{}]", 
+                            order.getPointsUsed(), order.getUserId());
+                    }
+                } else {
+                    log.warn("钱包服务未注入，无法退款");
+                }
+                
+                // 恢复商品库存
+                LambdaQueryWrapper<OrderItem> itemQuery = Wrappers.<OrderItem>lambdaQuery()
+                        .eq(OrderItem::getOrderId, order.getId());
+                List<OrderItem> orderItems = orderItemMapper.selectList(itemQuery);
+                
+                for (OrderItem item : orderItems) {
+                    productService.increaseStock(item.getProductId(), item.getQuantity());
+                    log.info("已恢复商品[{}]库存: {}", item.getProductId(), item.getQuantity());
+                }
             }
         } else {
             // 拒绝退款
             newStatus = OrderStatusEnum.RETURN_REJECTED;
+            
+            // 查询退货申请记录，并设置拒绝原因
+            LambdaQueryWrapper<ReturnRequest> returnRequestQueryWrapper = Wrappers.<ReturnRequest>lambdaQuery()
+                    .eq(ReturnRequest::getOrderId, order.getId());
+            ReturnRequest returnRequest = returnRequestMapper.selectOne(returnRequestQueryWrapper);
+            
+            if (returnRequest != null) {
+                // 更新退货申请状态和拒绝原因
+                returnRequest.setStatus(ReturnStatusEnum.REJECTED);
+                returnRequest.setRejectionReason(remark);
+                returnRequest.setAuditTime(LocalDateTime.now());
+                returnRequest.setUpdateTime(LocalDateTime.now());
+                returnRequestMapper.updateById(returnRequest);
+                
+                log.info("已更新退货申请的拒绝原因: {}", remark);
+            } else {
+                log.warn("订单[{}]没有对应的退货申请记录", orderNo);
+            }
         }
         
         updateOrder.setStatus(newStatus);
@@ -1129,5 +1251,261 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         }
         
         return result;
+    }
+
+    /**
+     * 获取用户的订单状态计数
+     */
+    @Override
+    public java.util.Map<String, Integer> getUserOrderStatusCounts(Long userId) {
+        log.info("获取用户[{}]的订单状态计数", userId);
+        
+        // 初始化结果集
+        java.util.Map<String, Integer> result = new java.util.HashMap<>();
+        for (OrderStatusEnum status : OrderStatusEnum.values()) {
+            result.put(status.name(), 0);
+        }
+        
+        // 查询每种状态的订单数量
+        for (OrderStatusEnum status : OrderStatusEnum.values()) {
+            LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
+                    .eq(Order::getUserId, userId)
+                    .eq(Order::getStatus, status);
+            
+            long count = this.count(queryWrapper);
+            result.put(status.name(), (int) count);
+        }
+        
+        return result;
+    }
+
+    /**
+     * 更新订单状态为已支付
+     * @param orderNo 订单号
+     * @return 是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean updateOrderStatusToPaid(String orderNo) {
+        if (orderNo == null || orderNo.isEmpty()) {
+            return false;
+        }
+        
+        // 查询订单
+        Order order = orderMapper.selectByOrderNo(orderNo);
+        if (order == null) {
+            return false;
+        }
+        
+        // 检查订单状态
+        if (order.getStatus() != OrderStatusEnum.PENDING_PAYMENT) {
+            return false;
+        }
+        
+        // 更新订单状态
+        order.setStatus(OrderStatusEnum.PENDING_SHIPMENT);
+        order.setPaymentTime(LocalDateTime.now());
+        orderMapper.updateById(order);
+        
+        // 给用户奖励积分（每消费1元获得1积分）
+        awardPointsForPurchase(order);
+        
+        // 更新商品销量
+        updateProductSalesCount(order.getId());
+        
+        return true;
+    }
+
+    /**
+     * 订单支付完成后奖励用户积分
+     * @param order 订单信息
+     */
+    private void awardPointsForPurchase(Order order) {
+        try {
+            if (order == null || order.getUserId() == null || order.getActualPaymentAmount() == null) {
+                return;
+            }
+            
+            // 计算积分：每消费1元获得1积分
+            int points = order.getActualPaymentAmount().intValue();
+            
+            if (points > 0) {
+                // 调用积分服务奖励用户积分
+                pointsService.addPoints(
+                    order.getUserId(),
+                    points,
+                    PointsTransactionTypeEnum.PURCHASE_EARNED,
+                    "购物奖励: " + order.getOrderNo(),
+                    order.getId()
+                );
+                
+                log.info("用户[{}]购买订单[{}]奖励[{}]积分成功", order.getUserId(), order.getOrderNo(), points);
+            }
+        } catch (Exception e) {
+            log.error("奖励用户积分出错: {}", e.getMessage(), e);
+            // 积分奖励失败不影响订单流程
+        }
+    }
+
+    /**
+     * 更新商品销量
+     * @param orderId 订单ID
+     */
+    private void updateProductSalesCount(Long orderId) {
+        try {
+            // 查询订单项
+            LambdaQueryWrapper<OrderItem> queryWrapper = Wrappers.<OrderItem>lambdaQuery()
+                    .eq(OrderItem::getOrderId, orderId);
+            List<OrderItem> orderItems = orderItemMapper.selectList(queryWrapper);
+            
+            if (orderItems == null || orderItems.isEmpty()) {
+                log.warn("更新商品销量失败: 订单[{}]不存在订单项", orderId);
+                return;
+            }
+            
+            // 遍历订单项更新销量
+            for (OrderItem item : orderItems) {
+                productService.updateSalesCount(item.getProductId(), item.getQuantity());
+            }
+            
+            log.info("订单[{}]商品销量更新成功", orderId);
+        } catch (Exception e) {
+            log.error("更新商品销量出错: {}", e.getMessage(), e);
+            // 销量更新失败不影响订单流程，记录日志即可
+        }
+    }
+
+    /**
+     * 买家发出退货
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean buyerReturnGoods(Long userId, String orderNo, String trackingInfo) {
+        log.info("用户[{}]发出退货: {}", userId, orderNo);
+        
+        // 1. 查询订单
+        LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
+                .eq(Order::getOrderNo, orderNo)
+                .eq(Order::getUserId, userId);
+        Order order = orderMapper.selectOne(queryWrapper);
+        
+        if (order == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "订单不存在");
+        }
+        
+        // 2. 校验订单状态
+        if (order.getStatus() != OrderStatusEnum.RETURN_APPROVED) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
+                    "只有审核通过的退货申请才能发出退货，当前状态: " + order.getStatus().getDesc());
+        }
+        
+        // 3. 更新订单状态和时间
+        Order updateOrder = new Order();
+        updateOrder.setId(order.getId());
+        // 由于枚举中没有"买家已发货"状态，仍然保持RETURN_APPROVED状态
+        updateOrder.setUpdateTime(LocalDateTime.now());
+        
+        orderMapper.updateById(updateOrder);
+        
+        // 4. 查询退货申请记录
+        LambdaQueryWrapper<ReturnRequest> returnRequestQueryWrapper = Wrappers.<ReturnRequest>lambdaQuery()
+                .eq(ReturnRequest::getOrderId, order.getId());
+        ReturnRequest returnRequest = returnRequestMapper.selectOne(returnRequestQueryWrapper);
+        
+        if (returnRequest == null) {
+            log.error("订单[{}]没有对应的退货申请记录", orderNo);
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "退货申请记录不存在");
+        }
+        
+        // 5. 更新退货申请记录状态和退货时间
+        returnRequest.setStatus(ReturnStatusEnum.APPROVED_PENDING_RETURN);
+        returnRequest.setGoodsReturnedTime(LocalDateTime.now());
+        returnRequest.setUpdateTime(LocalDateTime.now());
+        returnRequestMapper.updateById(returnRequest);
+        
+        log.info("用户发出退货成功");
+        return true;
+    }
+
+    /**
+     * 商家确认收到退货
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean confirmReturnReceived(Long merchantId, String orderNo) {
+        log.info("商家[{}]确认收到退货: {}", merchantId, orderNo);
+        
+        // 1. 查询订单
+        LambdaQueryWrapper<Order> queryWrapper = Wrappers.<Order>lambdaQuery()
+                .eq(Order::getOrderNo, orderNo)
+                .eq(Order::getMerchantId, merchantId);
+        Order order = orderMapper.selectOne(queryWrapper);
+        
+        if (order == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "订单不存在");
+        }
+        
+        // 2. 校验订单状态
+        if (order.getStatus() != OrderStatusEnum.RETURN_APPROVED) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), 
+                    "只有审核通过的退货申请才能确认收到退货，当前状态: " + order.getStatus().getDesc());
+        }
+        
+        // 3. 更新订单状态
+        Order updateOrder = new Order();
+        updateOrder.setId(order.getId());
+        updateOrder.setStatus(OrderStatusEnum.RETURN_GOODS_RECEIVED);
+        updateOrder.setUpdateTime(LocalDateTime.now());
+        
+        orderMapper.updateById(updateOrder);
+        
+        // 4. 处理退款逻辑
+        if (walletService != null) {
+            // 先检查买家用户ID是否存在
+            User buyer = userMapper.selectById(order.getUserId());
+            if (buyer == null) {
+                log.error("找不到买家信息，无法退款，买家ID: {}", order.getUserId());
+                throw new BusinessException(HttpStatus.NOT_FOUND.value(), "买家信息不存在");
+            }
+            
+            // 返还用户支付金额
+            walletService.refundToBuyer(
+                order.getUserId(),
+                order.getId(),
+                order.getOrderNo(),
+                order.getActualPaymentAmount()
+            );
+            
+            log.info("已将订单金额{}退还给用户[{}]", 
+                order.getActualPaymentAmount(), order.getUserId());
+            
+            // 如果用户使用了积分，也需要退还
+            if (order.getPointsUsed() > 0) {
+                pointsService.addPoints(
+                    order.getUserId(),
+                    order.getPointsUsed(),
+                    PointsTransactionTypeEnum.REFUND_RETURNED,
+                    "订单退款返还积分: " + orderNo,
+                    order.getId()
+                );
+                log.info("已将订单使用的积分{}退还给用户[{}]", 
+                    order.getPointsUsed(), order.getUserId());
+            }
+        } else {
+            log.warn("钱包服务未注入，无法退款");
+        }
+        
+        // 5. 恢复商品库存
+        LambdaQueryWrapper<OrderItem> itemQuery = Wrappers.<OrderItem>lambdaQuery()
+                .eq(OrderItem::getOrderId, order.getId());
+        List<OrderItem> orderItems = orderItemMapper.selectList(itemQuery);
+        
+        for (OrderItem item : orderItems) {
+            productService.increaseStock(item.getProductId(), item.getQuantity());
+            log.info("已恢复商品[{}]库存: {}", item.getProductId(), item.getQuantity());
+        }
+        
+        log.info("确认收到退货成功");
+        return true;
     }
 } 

@@ -126,6 +126,11 @@ public class OrderDetailVO {
     private String remark;
     
     /**
+     * 退货申请信息
+     */
+    private ReturnRequestInfo returnRequestInfo;
+    
+    /**
      * 订单项列表
      */
     private List<OrderItem> orderItems;
@@ -164,6 +169,32 @@ public class OrderDetailVO {
          * 完整地址
          */
         private String fullAddress;
+    }
+    
+    /**
+     * 退货申请信息
+     */
+    @Data
+    public static class ReturnRequestInfo {
+        /**
+         * 退货原因
+         */
+        private String reason;
+        
+        /**
+         * 拒绝原因 (若被拒绝)
+         */
+        private String rejectionReason;
+        
+        /**
+         * 申请时间
+         */
+        private LocalDateTime applicationTime;
+        
+        /**
+         * 退货状态
+         */
+        private String status;
     }
     
     /**

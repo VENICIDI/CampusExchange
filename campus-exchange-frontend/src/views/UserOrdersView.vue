@@ -1,6 +1,6 @@
 <template>
   <div class="user-orders-container">
-    <div class="container py-5">
+    <div class="container py-5 px-md-5">
       <h2 class="mb-4 section-title"><i class="fas fa-file-invoice-dollar me-2"></i>我的订单</h2>
       
       <!-- 订单状态筛选 -->
@@ -14,15 +14,6 @@
           >
             {{ label }}
             <span v-if="getStatusCount(status) > 0" class="badge bg-danger ms-1">{{ getStatusCount(status) }}</span>
-          </button>
-          
-          <!-- 待评价选项 -->
-          <button 
-            :class="['btn filter-btn', showUnreviewed ? 'btn-primary' : 'btn-outline-primary']"
-            @click="filterUnreviewed"
-          >
-            待评价
-            <span v-if="unreviewedCount > 0" class="badge bg-danger ms-1">{{ unreviewedCount }}</span>
           </button>
         </div>
       </div>
@@ -70,10 +61,9 @@
                   <tr>
                     <th style="width: 12%">商品图片</th>
                     <th style="width: 40%">商品名称</th>
-                    <th style="width: 12%">单价</th>
-                    <th style="width: 10%">数量</th>
-                    <th style="width: 16%">小计</th>
-                    <th style="width: 10%">操作</th>
+                    <th style="width: 15%">单价</th>
+                    <th style="width: 12%">数量</th>
+                    <th style="width: 21%">小计</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -90,13 +80,6 @@
                     <td class="text-center align-middle">¥{{ item.price }}</td>
                     <td class="text-center align-middle">{{ item.quantity }}</td>
                     <td class="text-center align-middle"><strong>¥{{ (item.price * item.quantity).toFixed(2) }}</strong></td>
-                    <td class="text-center align-middle">
-                      <button v-if="order.status === 'PENDING_PAYMENT'" 
-                              @click.stop="payOrder(order.orderNo)" 
-                              class="btn btn-sm btn-outline-primary">
-                        付款
-                      </button>
-                    </td>
                   </tr>
                 </tbody>
               </table>
@@ -108,28 +91,6 @@
             </div>
           </div>
         </div>
-      </div>
-      
-      <!-- 分页控件 -->
-      <div v-if="totalPages > 1" class="pagination-container d-flex justify-content-center mt-4">
-        <nav aria-label="订单分页">
-          <ul class="pagination">
-            <li :class="['page-item', currentPage === 1 ? 'disabled' : '']">
-              <a class="page-link" href="#" @click.prevent="goToPage(currentPage - 1)">
-                <i class="fas fa-chevron-left"></i>
-              </a>
-            </li>
-            <li v-for="page in paginationItems" :key="page" 
-                :class="['page-item', page === currentPage ? 'active' : '']">
-              <a class="page-link" href="#" @click.prevent="goToPage(page)">{{ page }}</a>
-            </li>
-            <li :class="['page-item', currentPage === totalPages ? 'disabled' : '']">
-              <a class="page-link" href="#" @click.prevent="goToPage(currentPage + 1)">
-                <i class="fas fa-chevron-right"></i>
-              </a>
-            </li>
-          </ul>
-        </nav>
       </div>
     </div>
   </div>
@@ -144,22 +105,25 @@ import { ElMessage, ElMessageBox } from 'element-plus';
 const router = useRouter();
 const loading = ref(true);
 const orders = ref([]);
-const currentPage = ref(1);
-const pageSize = ref(10);
 const total = ref(0);
 const currentStatus = ref(null);
 const showUnreviewed = ref(false);
 const unreviewedCount = ref(0);
+
+// 删除不再需要的分页相关变量
+const currentPage = ref(1);
+const pageSize = ref(10);
 
   // 订单状态选项
   const statusOptions = {
     null: '全部订单',
     'PENDING_PAYMENT': '待付款',
     'PENDING_SHIPMENT': '待发货',
-    'SHIPPED': '已发货',
-    'RECEIVED': '已收货',
+  'SHIPPED': '待收货',
+  'RECEIVED': '待评价',
     'COMPLETED': '已完成',
-    'CANCELLED': '已取消'
+  'CANCELLED': '已取消',
+  'AFTERSALE': '售后处理'
   };
   
     // 存储各状态的订单数量
@@ -169,40 +133,12 @@ const statusCounts = ref({
   'SHIPPED': 0,
   'RECEIVED': 0,
   'COMPLETED': 0,
-  'CANCELLED': 0
-});
-
-// 计算总页数
-const totalPages = computed(() => {
-  return Math.ceil(total.value / pageSize.value);
-});
-
-// 计算分页项
-const paginationItems = computed(() => {
-  const items = [];
-  const maxVisiblePages = 5;
-  
-  if (totalPages.value <= maxVisiblePages) {
-    // 总页数小于最大可见页数，显示所有页码
-    for (let i = 1; i <= totalPages.value; i++) {
-      items.push(i);
-    }
-  } else {
-    // 总页数大于最大可见页数，显示部分页码
-    let startPage = Math.max(1, currentPage.value - Math.floor(maxVisiblePages / 2));
-    let endPage = Math.min(totalPages.value, startPage + maxVisiblePages - 1);
-    
-    // 调整开始页码，确保显示maxVisiblePages个页码
-    if (endPage - startPage + 1 < maxVisiblePages) {
-      startPage = Math.max(1, endPage - maxVisiblePages + 1);
-    }
-    
-    for (let i = startPage; i <= endPage; i++) {
-      items.push(i);
-    }
-  }
-  
-  return items;
+  'CANCELLED': 0,
+  'RETURN_REQUESTED': 0,
+  'RETURN_APPROVED': 0,
+  'RETURN_GOODS_RECEIVED': 0,
+  'RETURNED': 0,
+  'RETURN_REJECTED': 0
 });
 
 // 获取用户订单列表
@@ -210,8 +146,8 @@ const fetchOrders = async () => {
   loading.value = true;
   try {
     const params = {
-      pageNum: currentPage.value,
-      pageSize: pageSize.value,
+      pageNum: 1,
+      pageSize: 1000, // 设置一个足够大的数值，一次获取所有订单
       status: currentStatus.value
     };
     
@@ -265,10 +201,20 @@ const getTotalItemCount = (order) => {
 // 按状态筛选
 const filterByStatus = (status) => {
   // 如果是'null'或者'all'，将其转为null，确保后端接收到的是null而不是字符串
-  currentStatus.value = (status === 'null' || status === null || status === 'all') ? null : status;
   showUnreviewed.value = false; // 退出待评价状态
-  currentPage.value = 1;
+  
+  if (status === 'AFTERSALE') {
+    // 处理售后状态特殊筛选 - 前端筛选售后相关状态
+    currentStatus.value = null; // 先获取全部
+    fetchOrders().then(() => {
+      // 只显示售后相关状态的订单
+      const afterSaleStatuses = ['RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_GOODS_RECEIVED', 'RETURNED', 'RETURN_REJECTED'];
+      orders.value = orders.value.filter(order => afterSaleStatuses.includes(order.status));
+    });
+  } else {
+    currentStatus.value = (status === 'null' || status === null || status === 'all') ? null : status;
   fetchOrders();
+  }
 };
 
 // 筛选未评价订单
@@ -277,12 +223,10 @@ const filterUnreviewed = async () => {
   if (showUnreviewed.value) {
     // 如果进入待评价状态，清除当前状态选择
     currentStatus.value = null;
-    currentPage.value = 1;
     await fetchUnreviewedOrders();
   } else {
     // 如果退出待评价状态，恢复默认全部订单
     currentStatus.value = null;
-    currentPage.value = 1;
     fetchOrders();
   }
 };
@@ -303,7 +247,7 @@ const fetchUnreviewedOrders = async () => {
         return;
       }
       
-      // 获取未评价订单的详情
+      // 获取所有未评价订单的详情（不使用分页）
       const unreviewedOrders = [];
       for (const orderNo of unreviewedOrderNos) {
         try {
@@ -346,11 +290,70 @@ const fetchUnreviewedOrders = async () => {
   }
 };
 
-// 跳转到指定页
-const goToPage = (page) => {
-  if (page < 1 || page > totalPages.value) return;
-  currentPage.value = page;
-  fetchOrders();
+// 跳转到订单详情页
+const goToOrderDetail = (orderNo) => {
+  router.push(`/order/${orderNo}`);
+};
+
+// 获取未评价订单数量
+const fetchUnreviewedCount = async () => {
+  try {
+    const response = await orderApi.getUnreviewedOrders();
+    if (response.data && response.data.code === 200) {
+      unreviewedCount.value = response.data.data ? response.data.data.length : 0;
+    }
+  } catch (error) {
+    console.error('获取未评价订单数量出错:', error);
+  }
+};
+
+// 获取指定状态的订单数量
+const getStatusCount = (status) => {
+  // 全部订单显示所有状态订单数量的总和
+  if (status === null || status === 'null') {
+    // 计算所有状态订单的总和
+    return Object.values(statusCounts.value).reduce((sum, count) => sum + count, 0);
+  }
+  
+  // 处理"售后处理"的情况
+  if (status === 'AFTERSALE') {
+    // 计算所有售后相关状态订单的总和
+    const afterSaleStatuses = ['RETURN_REQUESTED', 'RETURN_APPROVED', 'RETURN_GOODS_RECEIVED', 'RETURNED', 'RETURN_REJECTED'];
+    return afterSaleStatuses.reduce((sum, status) => sum + (statusCounts.value[status] || 0), 0);
+  }
+  
+  // 返回状态计数
+  return statusCounts.value[status] || 0;
+};
+
+// 获取各状态订单数量
+const fetchStatusCounts = async () => {
+  try {
+    // 调用API获取订单状态计数
+    const response = await orderApi.getUserOrderStatusCounts();
+    
+    if (response.data && response.data.code === 200) {
+      const counts = response.data.data;
+      
+      // 更新状态计数
+      Object.keys(counts).forEach(status => {
+        if (statusCounts.value[status] !== undefined) {
+          statusCounts.value[status] = counts[status];
+        }
+      });
+      
+      // 计算总订单数量
+      let totalCount = 0;
+      for (const statusKey in statusCounts.value) {
+        totalCount += statusCounts.value[statusKey] || 0;
+      }
+      console.log("用户订单总数:", totalCount);
+    } else {
+      console.error('获取订单状态统计失败：', response.data?.message || '未知错误');
+    }
+  } catch (error) {
+    console.error('获取订单状态统计失败：', error);
+  }
 };
 
 // 取消订单
@@ -489,88 +492,23 @@ const confirmReceipt = async (orderNo) => {
   }
 };
 
-// 跳转到订单详情页
-const goToOrderDetail = (orderNo) => {
-  router.push(`/order/${orderNo}`);
-};
-
-// 获取未评价订单数量
-const fetchUnreviewedCount = async () => {
-  try {
-    const response = await orderApi.getUnreviewedOrders();
-    if (response.data && response.data.code === 200) {
-      unreviewedCount.value = response.data.data ? response.data.data.length : 0;
-    }
-  } catch (error) {
-    console.error('获取未评价订单数量出错:', error);
-  }
-};
-
-// 获取指定状态的订单数量
-const getStatusCount = (status) => {
-  // 全部订单显示所有状态订单数量的总和
-  if (status === 'null') {
-    // 计算所有状态订单的总和
-    return Object.values(statusCounts.value).reduce((sum, count) => sum + count, 0);
-  }
-  
-  // 返回状态计数
-  return statusCounts.value[status] || 0;
-};
-
-// 获取各状态订单数量
-const fetchStatusCounts = async () => {
-  try {
-    // 获取所有订单并手动计算各状态数量
-    const allOrdersResponse = await orderApi.getUserOrders({
-      pageNum: 1,
-      pageSize: 100, // 获取足够多的订单以计算数量
-      status: null    // 获取所有状态的订单
-    });
-    
-    if (allOrdersResponse.data && allOrdersResponse.data.code === 200) {
-      const allOrders = allOrdersResponse.data.data.records || [];
-      
-      // 统计各状态订单数量
-      const tempCounts = {
-        'PENDING_PAYMENT': 0,
-        'PENDING_SHIPMENT': 0,
-        'SHIPPED': 0,
-        'RECEIVED': 0,
-        'COMPLETED': 0,
-        'CANCELLED': 0
-      };
-      
-      allOrders.forEach(order => {
-        if (tempCounts[order.status] !== undefined) {
-          tempCounts[order.status]++;
-        }
-      });
-      
-      // 更新状态计数
-      statusCounts.value = tempCounts;
-      
-      console.log('各状态订单数量:', tempCounts);
-      const totalCount = Object.values(tempCounts).reduce((sum, count) => sum + count, 0);
-      console.log('订单总数 (各状态总和):', totalCount);
-    }
-  } catch (error) {
-    console.error('获取订单状态数量出错:', error);
-  }
-};
-
 // 页面加载
 onMounted(async () => {
   await fetchOrders();
-  await fetchUnreviewedCount();
   await fetchStatusCounts(); // 获取各状态订单数量
 });
 </script>
 
 <style scoped>
 .user-orders-container {
-  min-height: 90vh;
   background-color: #f8f9fa;
+  min-height: 100vh;
+  padding: 0 15px;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
 }
 
 .section-title {
@@ -787,27 +725,27 @@ onMounted(async () => {
   box-shadow: 0 4px 10px rgba(0,0,0,0.1);
 }
 
+.pagination-container {
+  margin-bottom: 3rem;
+  width: 100%;
+}
+
 .pagination {
-  margin-top: 30px;
+  margin-top: 40px;
+  margin-bottom: 30px;
 }
 
 .pagination .page-link {
   border-radius: 8px;
-  margin: 0 3px;
+  margin: 0 5px;
   color: #4568dc;
   transition: all 0.2s ease;
   box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+  padding: 10px 18px;
 }
 
-.pagination .page-item.active .page-link {
-  background-color: #4568dc;
-  border-color: #4568dc;
-}
-
-.pagination .page-link:hover {
-  background-color: #f0f7ff;
-  transform: translateY(-2px);
-  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+.pagination-lg .page-link {
+  font-size: 1.1rem;
 }
 
 .empty-state {
@@ -831,14 +769,20 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
+  .user-orders-container {
+    padding: 0 10px;
+  }
+  
   .status-filter .btn-group {
     justify-content: space-between;
+    flex-wrap: wrap;
   }
   
   .filter-btn {
     min-width: auto;
     padding: 8px 12px;
     font-size: 0.9rem;
+    margin-bottom: 5px;
   }
   
   .order-footer {

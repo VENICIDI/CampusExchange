@@ -18,6 +18,9 @@ export const orderApi = {
   // 获取订单状态统计
   getOrderStatusCounts: () => api.get('/orders/status-counts'),
   
+  // 获取用户订单状态统计
+  getUserOrderStatusCounts: () => api.get('/orders/user-status-counts'),
+  
   // 获取订单详情
   getOrderDetail: (orderNo) => api.get(`/orders/${orderNo}`),
   
@@ -67,6 +70,16 @@ export const orderApi = {
     }
   },
   
+  // 买家发出退货
+  buyerReturnGoods: (orderNo, trackingInfo) => api.post(
+    `/orders/${orderNo}/return/ship`,
+    null,
+    { params: { trackingInfo } }
+  ),
+  
+  // 商家确认收到退货
+  confirmReturnReceived: (orderNo) => api.post(`/orders/${orderNo}/return/received`),
+  
   // 获取用户待评价订单
   getUnreviewedOrders: () => api.get('/reviews/unreviewedOrders'),
   
@@ -78,7 +91,7 @@ export const orderApi = {
     RECEIVED: '已收货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
-    RETURN_REQUESTED: '申请退货',
+    RETURN_REQUESTED: '申请退货中',
     RETURN_APPROVED: '退货审核通过',
     RETURN_GOODS_RECEIVED: '收到退货',
     RETURNED: '已退货退款',

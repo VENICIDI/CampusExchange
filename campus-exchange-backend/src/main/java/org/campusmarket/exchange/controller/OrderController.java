@@ -284,6 +284,52 @@ public class OrderController {
     }
     
     /**
+     * 买家发出退货
+     * @param orderNo 订单编号
+     * @return 是否成功
+     */
+    @PostMapping("/{orderNo}/return/ship")
+    public Result<Boolean> buyerReturnGoods(
+            @PathVariable String orderNo,
+            @RequestParam(required = false) String trackingInfo) {
+        UserDTO currentUser = UserContext.getCurrentUser();
+        if (currentUser == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
+        }
+        
+        boolean shipped = orderService.buyerReturnGoods(currentUser.getId(), orderNo, trackingInfo);
+        return Result.success(shipped);
+    }
+    
+    /**
+     * 商家确认收到退货
+     * @param orderNo 订单编号
+     * @return 是否成功
+     */
+    @PostMapping("/{orderNo}/return/received")
+    public Result<Boolean> confirmReturnReceived(@PathVariable String orderNo) {
+        UserDTO currentUser = UserContext.getCurrentUser();
+        if (currentUser == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
+        }
+        
+        // 检查是否为商家
+        Integer role = currentUser.getRole();
+        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+            throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以确认收到退货");
+        }
+        
+        // 根据用户ID获取商家ID
+        Merchant merchant = merchantService.getMerchantByUserId(currentUser.getId());
+        if (merchant == null) {
+            throw new BusinessException(HttpStatus.NOT_FOUND.value(), "未找到商家信息");
+        }
+        
+        boolean received = orderService.confirmReturnReceived(merchant.getId(), orderNo);
+        return Result.success(received);
+    }
+    
+    /**
      * 获取商家订单状态统计
      * @return 各状态订单数量
      */
@@ -308,6 +354,23 @@ public class OrderController {
         
         // 调用服务层方法获取订单状态统计
         java.util.Map<String, Integer> counts = orderService.getMerchantOrderStatusCounts(merchant.getId());
+        
+        return Result.success(counts);
+    }
+    
+    /**
+     * 获取用户订单状态计数
+     * @return 各状态订单数量
+     */
+    @GetMapping("/user-status-counts")
+    public Result<java.util.Map<String, Integer>> getUserOrderStatusCounts() {
+        UserDTO currentUser = UserContext.getCurrentUser();
+        if (currentUser == null) {
+            throw new BusinessException(HttpStatus.UNAUTHORIZED.value(), "请先登录");
+        }
+        
+        // 调用服务层方法获取订单状态统计
+        java.util.Map<String, Integer> counts = orderService.getUserOrderStatusCounts(currentUser.getId());
         
         return Result.success(counts);
     }
