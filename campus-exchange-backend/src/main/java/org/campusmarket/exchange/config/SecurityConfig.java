@@ -97,6 +97,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/default-avatar.png", "/images/**", "/api/images/**").permitAll()
                         // 购物车和订单相关API需要认证
                         .requestMatchers("/api/cart/**", "/api/orders/**").authenticated()
+                        // 管理员API只允许ADMIN角色访问
+                        .requestMatchers("/api/admin/**").hasRole("ADMIN")
                         // 其他请求需要认证 (确保这行在最后)
                         .anyRequest().authenticated()
                 )

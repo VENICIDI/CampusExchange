@@ -3,8 +3,10 @@ package org.campusmarket.exchange.service;
 
 // 暂时不使用IService，避免可能的问题
 // import com.baomidou.mybatisplus.extension.service.IService;
+import org.campusmarket.exchange.dto.PageResult;
 import org.campusmarket.exchange.dto.UserRegisterDTO;
 import org.campusmarket.exchange.entity.User;
+import org.campusmarket.exchange.enums.RoleEnum;
 import org.campusmarket.exchange.enums.UserStatusEnum;
 
 import java.util.List;
@@ -35,6 +37,12 @@ public interface IUserService {
     
     // 更新用户信息
     boolean updateUser(User user);
+    
+    // 分页查询用户列表，支持条件筛选
+    PageResult<User> getUserList(Integer page, Integer size, RoleEnum role, UserStatusEnum status, String keyword);
+    
+    // 统计所有用户数量
+    long countAllUsers();
     
     // 登录逻辑由 Spring Security 通过 UserDetailsService 处理
 }

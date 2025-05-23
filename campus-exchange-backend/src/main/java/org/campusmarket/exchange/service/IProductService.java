@@ -53,6 +53,14 @@ public interface IProductService {
     Page<ProductVO> queryProducts(ProductQueryDTO queryDTO);
     
     /**
+     * 管理员查询所有商品(不限状态)
+     * @param queryDTO 查询条件
+     * @param status 指定状态(可选)
+     * @return 分页商品列表
+     */
+    Page<ProductVO> adminQueryProducts(ProductQueryDTO queryDTO, ProductStatusEnum status);
+    
+    /**
      * 获取商家的商品列表
      * @param merchantId 商家ID
      * @param status 状态（可选）
@@ -107,4 +115,10 @@ public interface IProductService {
      * @return 是否成功
      */
     boolean updateSalesCount(Long productId, Integer quantity);
+
+    /**
+     * 统计所有商品数量
+     * @return 商品总数
+     */
+    long countAllProducts();
 } 

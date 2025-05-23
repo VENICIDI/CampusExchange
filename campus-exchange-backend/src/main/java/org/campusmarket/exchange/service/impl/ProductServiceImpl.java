@@ -734,4 +734,113 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
             return false;
         }
     }
+
+    /**
+     * 管理员查询所有商品(不限状态)
+     * @param queryDTO 查询条件
+     * @param status 指定状态(可选)
+     * @return 分页商品列表
+     */
+    @Override
+    public Page<ProductVO> adminQueryProducts(ProductQueryDTO queryDTO, ProductStatusEnum status) {
+        log.info("管理员分页查询商品列表: page={}, size={}, status={}", 
+                queryDTO.getPageNum(), queryDTO.getPageSize(), status);
+        
+        // 1. 构建查询条件
+        LambdaQueryWrapper<Product> queryWrapper = Wrappers.<Product>lambdaQuery()
+                .eq(queryDTO.getCategoryId() != null, Product::getCategoryId, queryDTO.getCategoryId())
+                .eq(queryDTO.getMerchantId() != null, Product::getMerchantId, queryDTO.getMerchantId())
+                .ge(queryDTO.getMinPrice() != null, Product::getCurrentPrice, queryDTO.getMinPrice())
+                .le(queryDTO.getMaxPrice() != null, Product::getCurrentPrice, queryDTO.getMaxPrice())
+                .like(StringUtils.hasText(queryDTO.getKeyword()), Product::getName, queryDTO.getKeyword());
+        
+        // 如果指定了状态，则按状态筛选
+        if (status != null) {
+            queryWrapper.eq(Product::getStatus, status);
+        }
+        
+        // 2. 设置排序方式
+        String orderBy = queryDTO.getOrderBy();
+        String orderDirection = queryDTO.getOrderDirection();
+        boolean isAsc = "asc".equalsIgnoreCase(orderDirection);
+
+        if ("price".equals(orderBy)) {
+            queryWrapper.orderBy(true, isAsc, Product::getCurrentPrice);
+        } else if ("sales".equals(orderBy) || "sales_count".equals(orderBy)) {
+            queryWrapper.orderByDesc(Product::getSales);
+        } else if ("rating".equals(orderBy) || "average_rating".equals(orderBy)) {
+            queryWrapper.orderByDesc(Product::getRating);
+        } else if ("publish_time".equals(orderBy)) {
+            queryWrapper.orderByDesc(Product::getPublishTime);
+        } else {
+            // 默认按更新时间降序排列
+            queryWrapper.orderByDesc(Product::getUpdateTime);
+        }
+        
+        // 3. 执行分页查询
+        Page<Product> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
+        Page<Product> productPage = page(page, queryWrapper);
+        
+        // 4. 转换为VO对象
+        Page<ProductVO> resultPage = new Page<>();
+        BeanUtils.copyProperties(productPage, resultPage, "records");
+        
+        // 获取所有商品对应的商家ID
+        List<Long> merchantIds = productPage.getRecords().stream()
+                .map(Product::getMerchantId)
+                .distinct()
+                .collect(Collectors.toList());
+        
+        // 批量查询商家信息
+        final Map<Long, String> merchantStoreNames = new HashMap<>();
+        if (!merchantIds.isEmpty()) {
+            List<Merchant> merchants = merchantMapper.selectBatchIds(merchantIds);
+            merchants.forEach(merchant -> merchantStoreNames.put(merchant.getId(), merchant.getStoreName()));
+        }
+        
+        // 转换商品记录
+        List<ProductVO> productVOList = productPage.getRecords().stream().map(product -> {
+            ProductVO vo = new ProductVO();
+            BeanUtils.copyProperties(product, vo);
+            vo.setStoreName(merchantStoreNames.getOrDefault(product.getMerchantId(), "未知卖家"));
+
+            // 设置主图
+            LambdaQueryWrapper<ProductImage> imageWrapper = Wrappers.<ProductImage>lambdaQuery()
+                .eq(ProductImage::getProductId, product.getId())
+                .orderByAsc(ProductImage::getSortOrder);
+            List<ProductImage> images = productImageMapper.selectList(imageWrapper);
+            
+            // 设置图片列表
+            List<String> imageUrls = images.stream()
+                    .map(ProductImage::getImageUrl)
+                    .collect(Collectors.toList());
+            vo.setImages(imageUrls);
+            vo.setImageUrls(imageUrls);
+            
+            ProductImage mainImage = images.stream()
+                .filter(ProductImage::getIsMain)
+                .findFirst()
+                .orElse(images.isEmpty() ? null : images.get(0));
+            if (mainImage != null) {
+                vo.setMainImage(mainImage.getImageUrl());
+            }
+
+            // 确保正确映射字段
+            vo.setProductCondition(product.getProductCondition());
+            vo.setSalesCount(product.getSales());
+            vo.setSizeInfo(product.getSize());
+            vo.setAverageRating(product.getRating());
+
+            return vo;
+        }).collect(Collectors.toList());
+        
+        resultPage.setRecords(productVOList);
+        return resultPage;
+    }
+
+    @Override
+    public long countAllProducts() {
+        // 使用通用mapper方法统计所有商品
+        return productMapper.selectCount(null);
+    }
 } 

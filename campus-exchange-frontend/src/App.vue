@@ -17,6 +17,11 @@ const isAuthPage = computed(() => {
   return route.path === '/login' || route.path === '/register'
 })
 
+// 计算属性：是否在管理员页面
+const isAdminPage = computed(() => {
+  return route.path.startsWith('/admin')
+})
+
 // 计算属性：用户是否已登录
 const isLoggedIn = computed(() => {
   const loggedIn = user.value !== null && user.value !== undefined;
@@ -193,8 +198,8 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- 黑色顶部导航栏 -->
-  <nav class="app-topnav">
+  <!-- 黑色顶部导航栏 - 在管理员页面不显示 -->
+  <nav v-if="!isAdminPage" class="app-topnav">
     <div class="container">
       <div class="left">
         <!-- 导航链接 - 左侧区域 -->
@@ -245,8 +250,8 @@ onUnmounted(() => {
     </div>
   </nav>
   
-  <!-- 浮动顶部导航栏，只在首页显示 -->
-  <FloatingHeader v-if="route.path === '/' || route.path === '/home' || route.path === '/buyer'" />
+  <!-- 浮动顶部导航栏，只在首页显示且不在管理员页面 -->
+  <FloatingHeader v-if="(route.path === '/' || route.path === '/home' || route.path === '/buyer') && !isAdminPage" />
 
   <!-- 内容区域 -->
   <main class="content">
@@ -267,7 +272,8 @@ onUnmounted(() => {
     <router-view v-else />
   </main>
 
-  <footer class="footer">
+  <!-- 页脚 - 在管理员页面不显示 -->
+  <footer v-if="!isAdminPage" class="footer">
     <div class="container">
       <p>© {{ currentYear }} 校园二手交易平台. 保留所有权利.</p>
     </div>

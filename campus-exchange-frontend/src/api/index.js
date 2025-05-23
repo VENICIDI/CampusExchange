@@ -1,6 +1,12 @@
 import axios from 'axios';
 // 导入路由以便在API响应中可以使用路由跳转
 import router from '../router';
+import * as user from './user'
+import * as admin from './admin'
+import * as adminUser from './adminUser'
+import * as adminProduct from './adminProduct'
+import * as adminMerchantLevel from './adminMerchantLevel'
+import * as adminMerchant from './adminMerchant'
 
 // 创建axios实例
 const api = axios.create({
@@ -130,4 +136,13 @@ api.logRequest = (config) => {
   });
 };
 
-export default api; 
+export default api;
+
+export {
+  user,
+  admin,
+  adminUser,
+  adminProduct,
+  adminMerchantLevel,
+  adminMerchant
+} 

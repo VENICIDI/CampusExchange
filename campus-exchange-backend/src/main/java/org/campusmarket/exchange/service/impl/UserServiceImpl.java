@@ -2,6 +2,7 @@
 package org.campusmarket.exchange.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import jakarta.annotation.Resource;
 // --- 1. 导入 @Lazy 注解 ---
 import org.springframework.context.annotation.Lazy;
@@ -26,6 +27,7 @@ import org.springframework.security.crypto.password.PasswordEncoder; // 确保�
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.campusmarket.exchange.dto.PageResult;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -100,10 +102,9 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
             user.setRole(registerDTO.getIsMerchant() ? RoleEnum.MERCHANT : RoleEnum.USER);
             System.out.println("设置用户角色: " + user.getRole().name());
 
-            // 设置用户状态为正常（临时方案：取消审核流程）
-            // 注意：如果实际需要审核，这里应该是 PENDING
-            user.setStatus(UserStatusEnum.NORMAL);
-            System.out.println("设置用户状态: " + user.getStatus().name());
+            // 设置用户状态为待审核，需管理员审核后才能正常使用
+            user.setStatus(UserStatusEnum.PENDING);
+            System.out.println("设置用户状态为待审核: " + user.getStatus().name());
 
             // 保存用户
             try {
@@ -366,5 +367,55 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
                 accountNonLocked,   // 账号是否未锁定
                 authorities         // 用户权限列表
         );
+    }
+
+    /**
+     * 分页查询用户列表，支持条件筛选
+     */
+    @Override
+    public PageResult<User> getUserList(Integer page, Integer size, RoleEnum role, UserStatusEnum status, String keyword) {
+        // 创建分页参数对象
+        Page<User> pageParam = new Page<>(page, size);
+        
+        // 构建条件查询器
+        LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
+        
+        // 如果指定了角色，添加角色筛选条件
+        if (role != null) {
+            queryWrapper.eq(User::getRole, role);
+        }
+        
+        // 如果指定了状态，添加状态筛选条件
+        if (status != null) {
+            queryWrapper.eq(User::getStatus, status);
+        }
+        
+        // 如果有关键词，添加模糊查询条件（用户名、邮箱、手机号）
+        if (StringUtils.hasText(keyword)) {
+            queryWrapper.and(wrapper -> wrapper
+                    .like(User::getUsername, keyword)
+                    .or()
+                    .like(User::getEmail, keyword)
+                    .or()
+                    .like(User::getPhone, keyword)
+                    .or()
+                    .like(User::getRealName, keyword)
+            );
+        }
+        
+        // 按创建时间降序排序
+        queryWrapper.orderByDesc(User::getCreateTime);
+        
+        // 执行分页查询
+        Page<User> resultPage = userMapper.selectPage(pageParam, queryWrapper);
+        
+        // 转换为自定义的分页结果对象
+        return PageResult.fromIPage(resultPage);
+    }
+
+    @Override
+    public long countAllUsers() {
+        // 使用通用mapper方法统计所有用户
+        return userMapper.selectCount(null);
     }
 }

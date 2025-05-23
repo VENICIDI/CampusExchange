@@ -17,6 +17,11 @@ import PaymentView from '../views/PaymentView.vue'
 
 import CartView from '../views/CartView.vue'
 
+// 导入管理员布局和仪表盘组件
+// 注意：这些组件将在后续步骤中创建
+import AdminLayout from '../views/admin/AdminLayout.vue' 
+import AdminDashboard from '../views/admin/AdminDashboard.vue'
+
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
@@ -154,6 +159,54 @@ const router = createRouter({
       name: 'payment',
       component: PaymentView,
       meta: { requiresAuth: true }
+    },
+    // 添加管理员专属路由
+    {
+      path: '/admin',
+      component: AdminLayout,
+      meta: { requiresAuth: true, roles: ['ADMIN'] },
+      children: [
+        {
+          path: '',
+          name: 'admin-dashboard',
+          component: AdminDashboard,
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        // 用户管理路由
+        {
+          path: 'users',
+          name: 'user-management',
+          component: () => import('../views/admin/UserManagementView.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        // 商品管理路由
+        {
+          path: 'products',
+          name: 'product-management',
+          component: () => import('../views/admin/ProductManagementView.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        // 商家管理路由
+        {
+          path: 'merchants',
+          name: 'merchant-management',
+          component: () => import('../views/admin/MerchantManagementView.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        // 平台设置路由，直接重定向到商家等级管理
+        {
+          path: 'settings',
+          redirect: '/admin/merchant-levels'
+        },
+        // 商家等级管理路由
+        {
+          path: 'merchant-levels',
+          name: 'merchant-level-management',
+          component: () => import('../views/admin/MerchantLevelManagementView.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
+        // 后续可添加更多管理员子路由
+      ]
     }
   ],
 })
@@ -199,64 +252,44 @@ router.beforeEach((to, from, next) => {
     console.log('用户未登录');
   }
 
-  // 登录成功后的默认重定向逻辑
-  if (to.path === '/' && isLoggedIn && userRole === 'MERCHANT' && from.path === '/login') {
-    console.log('商家登录成功，默认进入卖家模式并跳转到商家中心');
-    // 默认设置为卖家模式
-    localStorage.setItem('sellerMode', 'true');
-    next({ name: 'merchant-dashboard' });
-    return;
-  }
-
-  // 检查是否需要特定角色
-  if (to.matched.some(record => record.meta.roles)) {
-    // 如果用户未登录，先跳转到登录页
+  // 如果路由需要认证
+  if (to.matched.some(record => record.meta.requiresAuth)) {
     if (!isLoggedIn) {
-      console.log('需要登录才能访问此页面，重定向到登录页');
-      next({ 
-        name: 'login',
-        query: { redirect: to.fullPath } // 保存原来要去的页面，便于登录后跳转回来
-      });
+      console.log('需要登录的路由，但用户未登录，重定向到登录页');
+      next({ name: 'login' });
       return;
     }
     
-    // 如果用户已登录但角色不匹配，跳转到首页
+    // 检查角色权限
+    if (to.meta.roles && to.meta.roles.length > 0) {
     if (!to.meta.roles.includes(userRole)) {
-      console.log('用户角色不满足路由要求，重定向到首页');
+        console.log('用户角色不匹配，无权限访问');
+        // 根据角色重定向到相应的首页
+        if (userRole === 'MERCHANT') {
+          next({ name: 'merchant-dashboard' });
+        } else {
       next({ name: 'home' });
+        }
       return;
     }
   }
-
-  // 检查是否需要登录
-  if (to.matched.some(record => record.meta.requiresAuth)) {
-    if (!isLoggedIn) {
-      console.log('需要登录才能访问此页面，重定向到登录页');
-      next({
-        name: 'login',
-        query: { redirect: to.fullPath }
-      });
-      return;
-    }
   }
 
-  // guest 路由，已登录用户不应该访问
-  if (to.matched.some(record => record.meta.guest)) {
-    if (isLoggedIn) {
-      console.log('已登录用户不应访问游客页面，重定向到首页');
+  // 如果是仅游客可访问的路由（如登录、注册页面），但用户已登录，则重定向
+  if (to.matched.some(record => record.meta.guest) && isLoggedIn) {
+    console.log('游客专用路由，但用户已登录，根据角色重定向');
+    // 根据角色重定向到相应的首页
+    if (userRole === 'ADMIN') {
+      next({ name: 'admin-dashboard' });
+    } else if (userRole === 'MERCHANT') {
+      next({ name: 'merchant-dashboard' });
+    } else {
       next({ name: 'home' });
-      return;
     }
+      return;
   }
 
-  // 设置页面标题
-  if (to.meta.title) {
-    document.title = `${to.meta.title} - 校园二手物品交易平台`;
-  } else {
-    document.title = "校园二手物品交易平台";
-  }
-
-  // 对于所有其他情况，放行
+  // 如果都没有拦截，则允许访问
   next();
 })
 

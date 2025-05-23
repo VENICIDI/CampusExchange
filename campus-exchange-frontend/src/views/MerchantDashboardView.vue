@@ -89,7 +89,42 @@
           </div>
           <div class="product-actions">
             <router-link :to="'/product/edit/' + product.id" class="edit-button">编辑</router-link>
-            <button class="view-button" @click="viewProduct(product.id)">查看</button>
+            <button 
+              v-if="product.status === 'ON_SALE'" 
+              class="off-shelf-button" 
+              @click="changeProductStatus(product.id, 'REMOVED_BY_SELLER')">
+              下架
+            </button>
+            <button 
+              v-else-if="product.status === 'REMOVED_BY_SELLER'" 
+              class="on-shelf-button" 
+              @click="changeProductStatus(product.id, 'PENDING_APPROVAL')">
+              上架
+            </button>
+            <button 
+              v-else-if="product.status === 'PENDING_APPROVAL'" 
+              class="pending-button" 
+              disabled>
+              待审核
+            </button>
+            <button 
+              v-else-if="product.status === 'REJECTED_RESUBMIT'" 
+              class="on-shelf-button" 
+              @click="changeProductStatus(product.id, 'PENDING_APPROVAL')">
+              重新上架
+            </button>
+            <button 
+              v-else-if="product.status === 'LOCKED'" 
+              class="pending-button" 
+              disabled>
+              已锁定
+            </button>
+            <button 
+              v-else-if="product.status === 'SOLD_OUT'" 
+              class="pending-button" 
+              disabled>
+              已售罄
+            </button>
           </div>
         </div>
       </div>
@@ -109,6 +144,7 @@
 import { ref, onMounted, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import { productApi, merchantApi, orderApi, reviewApi } from '@/api/all';
+import { ElMessage } from 'element-plus';
 
 const router = useRouter();
 const storeName = ref('');
@@ -360,6 +396,41 @@ const getStatusClass = (status) => {
 // 查看商品
 const viewProduct = (id) => {
   router.push(`/product/${id}`);
+};
+
+// 更改商品状态
+const changeProductStatus = async (id, status) => {
+  try {
+    // 根据不同的状态显示不同的确认信息
+    let confirmMessage = '';
+    if (status === 'REMOVED_BY_SELLER') {
+      confirmMessage = '确定要下架这个商品吗？下架后买家将无法购买此商品。';
+    } else if (status === 'PENDING_APPROVAL') {
+      confirmMessage = '确定要重新上架这个商品吗？商品将进入待审核状态，审核通过后才能正式上架。';
+    }
+    
+    // 使用浏览器内置的confirm对话框进行确认
+    const confirmed = window.confirm(confirmMessage);
+    if (!confirmed) {
+      return; // 用户取消操作
+    }
+    
+    // 调用API更新商品状态
+    const response = await productApi.updateProductStatus(id, status);
+    if (response.data && response.data.code === 200) {
+      // 更新成功
+      ElMessage.success(status === 'REMOVED_BY_SELLER' ? '商品已成功下架' : '商品已提交审核');
+      
+      // 重新加载商品列表以刷新数据
+      await loadMerchantProducts();
+    } else {
+      // 更新失败
+      ElMessage.error('操作失败: ' + (response.data?.message || '未知错误'));
+    }
+  } catch (error) {
+    console.error('商品状态更新失败:', error);
+    ElMessage.error('商品状态更新失败: ' + error.message);
+  }
 };
 
 // 查看所有商品
@@ -720,37 +791,72 @@ onMounted(() => {
   padding: 8px 12px;
   border-top: 1px solid #e0e6f7;
   background-color: #f8f9fa;
+  justify-content: center;
+  gap: 10px;
 }
 
-.edit-button, .view-button {
-  flex: 1;
-  padding: 7px 0;
+.edit-button, .view-button, .on-shelf-button, .off-shelf-button, .pending-button {
+  padding: 8px 40px;
+  border-radius: 6px;
   font-size: 14px;
-  text-align: center;
-  border-radius: 4px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s;
+  display: inline-block;
+  text-align: center;
+  text-decoration: none;
+  border: none;
+  min-width: 90px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .edit-button {
-  background-color: #4a6ee0;
   color: white;
-  margin-right: 8px;
-  text-decoration: none;
+  background-color: #1890ff;
 }
 
 .edit-button:hover {
-  background-color: #3d5eca;
+  background-color: #40a9ff;
 }
 
 .view-button {
-  background-color: white;
-  color: #4a6ee0;
-  border: 1px solid #4a6ee0;
+  color: #666;
+  background-color: #f5f5f5;
+  border: 1px solid #d9d9d9;
 }
 
 .view-button:hover {
-  background-color: #f0f4ff;
+  color: #40a9ff;
+  border-color: #40a9ff;
+}
+
+.on-shelf-button {
+  color: white;
+  background-color: #52c41a;
+}
+
+.on-shelf-button:hover {
+  background-color: #73d13d;
+}
+
+.off-shelf-button {
+  color: white;
+  background-color: #ff4d4f;
+}
+
+.off-shelf-button:hover {
+  background-color: #ff7875;
+}
+
+.pending-button {
+  color: #666;
+  background-color: #f2f2f2;
+  cursor: not-allowed;
+  opacity: 0.8;
+}
+
+.pending-button:hover {
+  background-color: #f2f2f2;
 }
 
 .merchant-products-empty {

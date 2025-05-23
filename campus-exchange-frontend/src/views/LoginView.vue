@@ -412,6 +412,8 @@ const redirectBasedOnRole = (role) => {
     localStorage.setItem('sellerMode', 'true');
     router.push('/merchant');
   } else if (role === 'ADMIN') {
+    // 管理员跳转到管理员页面
+    console.log('检测到管理员角色，跳转到管理员后台');
     router.push('/admin');
   } else {
     // USER角色

@@ -41,6 +41,14 @@ export const productApi = {
   // 删除商品
   deleteProduct: (id) => api.delete(`/products/${id}`),
   
+  // 更新商品状态
+  updateProductStatus: (id, status) => {
+    console.log(`更新商品状态: 商品ID=${id}, 新状态=${status}`);
+    return api.put(`/products/${id}/status`, null, {
+      params: { status }
+    });
+  },
+  
   // 上传商品图片
   uploadProductImages: (formData) => api.post('/products/images', formData, {
     headers: {

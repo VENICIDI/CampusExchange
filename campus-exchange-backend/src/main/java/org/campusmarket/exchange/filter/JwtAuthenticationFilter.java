@@ -26,18 +26,29 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
             throws ServletException, IOException {
         
+        // 记录请求路径
+        String requestURI = request.getRequestURI();
+        logger.debug("处理请求: " + requestURI);
+        
         // 从请求头获取用户ID和角色
         String userId = request.getHeader("X-User-Id");
         String username = request.getHeader("X-User-Name");
         String role = request.getHeader("X-User-Role");
+        
+        logger.debug("请求头信息 - X-User-Id: " + userId + ", X-User-Name: " + username + ", X-User-Role: " + role);
         
         // 如果请求头中包含用户ID，说明前端正在传递用户信息
         if (userId != null && !userId.isEmpty()) {
             try {
                 Long userIdLong = Long.parseLong(userId);
                 
+                // 将前端传来的角色名称标准化为Spring Security期望的格式
+                String securityRole = role != null ? role : "USER";
+                logger.debug("原始角色: " + securityRole);
+                
                 // 构建用户权限
-                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + (role != null ? role : "USER"));
+                SimpleGrantedAuthority authority = new SimpleGrantedAuthority("ROLE_" + securityRole);
+                logger.debug("创建权限: " + authority.getAuthority());
                 
                 // 创建认证令牌
                 UsernamePasswordAuthenticationToken authentication = new UsernamePasswordAuthenticationToken(
@@ -51,6 +62,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 
                 // 设置到Spring Security上下文
                 SecurityContextHolder.getContext().setAuthentication(authentication);
+                logger.debug("已设置认证对象到SecurityContext - 用户ID: " + userIdLong + ", 角色: " + securityRole);
                 
                 // 设置到UserContext
                 UserContext.setUserId(userIdLong);
@@ -82,6 +94,8 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             } catch (NumberFormatException e) {
                 logger.error("X-User-Id解析失败: " + userId, e);
             }
+        } else {
+            logger.debug("未在请求头中找到用户ID，请求将作为匿名处理");
         }
         
         filterChain.doFilter(request, response);

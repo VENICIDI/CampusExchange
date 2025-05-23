@@ -17,6 +17,28 @@ service.interceptors.request.use(
       config.headers['Authorization'] = `Bearer ${token}`;
     }
     
+    // 从localStorage获取用户信息
+    const userStr = localStorage.getItem('user');
+    if (userStr) {
+      try {
+        const user = JSON.parse(userStr);
+        if (user && user.userId) {
+          // 添加用户ID、用户名和角色到请求头
+          config.headers['X-User-Id'] = user.userId;
+          config.headers['X-User-Name'] = user.username || '';
+          config.headers['X-User-Role'] = user.role || '';
+          
+          console.log('添加用户信息到请求头:', { 
+            id: user.userId, 
+            name: user.username, 
+            role: user.role 
+          });
+        }
+      } catch (e) {
+        console.error('解析用户数据失败:', e);
+      }
+    }
+    
     // 添加调试日志
     console.log(`[请求] ${config.method.toUpperCase()} ${config.url}`, {
       url: config.url,
