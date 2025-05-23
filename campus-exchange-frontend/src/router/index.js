@@ -212,6 +212,13 @@ const router = createRouter({
           component: () => import('../views/admin/MerchantLevelManagementView.vue'),
           meta: { requiresAuth: true, roles: ['ADMIN'] }
         },
+        // 优惠券发放管理路由
+        {
+          path: 'discounts',
+          name: 'discount-management',
+          component: () => import('../views/admin/DiscountManagementView.vue'),
+          meta: { requiresAuth: true, roles: ['ADMIN'] }
+        },
         // 后续可添加更多管理员子路由
       ]
     }

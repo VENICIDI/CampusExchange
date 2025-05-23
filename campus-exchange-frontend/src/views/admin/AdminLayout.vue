@@ -12,7 +12,7 @@
         </router-link>
         <router-link to="/admin/merchants" class="nav-item">商家管理</router-link>
         <router-link to="/admin/products" class="nav-item">商品审核</router-link>
-        <router-link to="/admin/orders" class="nav-item">订单管理</router-link>
+        <router-link to="/admin/discounts" class="nav-item">优惠券发放</router-link>
         <router-link to="/admin/settings" class="nav-item">平台设置</router-link>
       </div>
       <div class="sidebar-footer">
@@ -62,8 +62,8 @@ export default {
         case '/admin/products':
           pageTitle.value = '商品审核';
           break;
-        case '/admin/orders':
-          pageTitle.value = '订单管理';
+        case '/admin/discounts':
+          pageTitle.value = '优惠券发放';
           break;
         case '/admin/settings':
           pageTitle.value = '平台设置';

@@ -61,6 +61,11 @@ public class OrderDetailVO {
     private BigDecimal pointsDeductionAmount;
     
     /**
+     * 优惠券折扣金额（管理员发放）
+     */
+    private BigDecimal discountAmount;
+    
+    /**
      * 实际支付金额
      */
     private BigDecimal actualPaymentAmount;

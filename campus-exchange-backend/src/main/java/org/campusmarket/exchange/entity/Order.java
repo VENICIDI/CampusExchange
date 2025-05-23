@@ -37,7 +37,10 @@ public class Order {
     // 积分抵扣金额
     private BigDecimal pointsDeductionAmount;
     
-    // 实际支付金额 (商品总金额 - 积分抵扣)
+    // 折扣金额（管理员发放的优惠券）
+    private BigDecimal discountAmount;
+    
+    // 实际支付金额 (商品总金额 - 积分抵扣 - 折扣金额)
     private BigDecimal actualPaymentAmount;
     
     // 平台手续费总额

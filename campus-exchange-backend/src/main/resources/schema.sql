@@ -176,6 +176,13 @@ CREATE TABLE `order` (
   CONSTRAINT `fk_order_merchant` FOREIGN KEY (`merchant_id`) REFERENCES `merchant` (`id`) ON DELETE RESTRICT -- 新增: 商家删除时，若有订单则阻止
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='订单表';
 
+
+
+-- 修改订单表，添加折扣金额字段
+ALTER TABLE `order` 
+ADD COLUMN `discount_amount` decimal(10,2) DEFAULT '0.00' COMMENT '折扣金额' AFTER `points_deduction_amount`;
+
+
 -- 10. 订单项表 (order_item)
 CREATE TABLE `order_item` (
   `id` BIGINT NOT NULL AUTO_INCREMENT COMMENT '订单项ID (主键)',
@@ -365,3 +372,14 @@ CREATE TABLE `user_blacklist` (
   INDEX `idx_user_id_active` (`user_id`, `is_active`),
   INDEX `idx_target_merchant_id` (`target_merchant_id`),
   CONSTRAINT `
+
+-- 20. 订单折扣表 (order_discount) 
+CREATE TABLE `order_discount` (
+  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '折扣ID',
+  `order_id` bigint NOT NULL COMMENT '订单ID',
+  `discount_amount` decimal(10,2) NOT NULL COMMENT '折扣金额',
+  `admin_id` bigint NOT NULL COMMENT '发放管理员ID',
+  `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `idx_order_id` (`order_id`) COMMENT '一个订单只能有一个折扣'
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单折扣表';

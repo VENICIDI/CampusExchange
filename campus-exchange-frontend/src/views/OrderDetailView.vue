@@ -193,6 +193,15 @@
                 </div>
               </div>
               
+              <!-- 管理员折扣信息 -->
+              <div class="row mb-2" v-if="order.discountAmount && order.discountAmount > 0">
+                <div class="col-md-4 col-6 text-muted">优惠券：</div>
+                <div class="col-md-8 col-6 text-success">
+                  -¥{{ formatPrice(order.discountAmount) }}
+                  <span class="discount-info text-muted">(平台优惠)</span>
+                </div>
+              </div>
+              
               <div class="row mb-2">
                 <div class="col-md-4 col-6 text-muted">实付金额：</div>
                 <div class="col-md-8 col-6 text-danger fw-bold">¥{{ formatPrice(order.actualPaymentAmount) }}</div>

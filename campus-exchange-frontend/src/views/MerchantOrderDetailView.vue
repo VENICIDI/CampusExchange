@@ -156,6 +156,10 @@
                     <span class="info-label">积分抵扣：</span>
                     <span>-¥{{ order.pointsDeductionAmount || 0 }}</span>
                   </div>
+                  <div v-if="order.discountAmount > 0" class="d-flex justify-content-between mb-2">
+                    <span class="info-label">平台优惠券：</span>
+                    <span class="text-success">-¥{{ order.discountAmount }}</span>
+                  </div>
                   <div class="d-flex justify-content-between mb-2">
                     <span class="info-label">平台服务费：</span>
                     <span>¥{{ order.platformCommissionAmount || 0 }}</span>
