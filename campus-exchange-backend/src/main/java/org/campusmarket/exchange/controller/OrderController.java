@@ -34,6 +34,9 @@ import java.util.List;
 @Validated
 public class OrderController {
     
+    // 商家角色值常量
+    private static final int ROLE_MERCHANT = 1;
+    
     @Resource
     private IOrderService orderService;
     
@@ -129,7 +132,10 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != 1) {
+        System.out.println("发货操作 - 当前用户角色: " + role + ", 用户名: " + currentUser.getUsername());
+        
+        // 使用角色常量判断是否为商家
+        if (role == null || role != ROLE_MERCHANT) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以查看商家订单");
         }
         
@@ -213,10 +219,9 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        System.out.println("发货操作 - 当前用户角色: " + role + ", 用户名: " + currentUser.getUsername());
         
-        // 使用固定值1判断是否为商家
-        if (role == null || role != 1) {
+        // 使用角色常量判断是否为商家
+        if (role == null || role != ROLE_MERCHANT) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以发货");
         }
         
@@ -269,7 +274,9 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+        
+        // 使用角色常量判断是否为商家
+        if (role == null || role != ROLE_MERCHANT) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以处理退货");
         }
         
@@ -315,7 +322,9 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != RoleEnum.MERCHANT.ordinal()) {
+        
+        // 使用角色常量判断是否为商家
+        if (role == null || role != ROLE_MERCHANT) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以确认收到退货");
         }
         
@@ -342,7 +351,9 @@ public class OrderController {
         
         // 检查是否为商家
         Integer role = currentUser.getRole();
-        if (role == null || role != 1) {
+        
+        // 使用角色常量判断是否为商家
+        if (role == null || role != ROLE_MERCHANT) {
             throw new BusinessException(HttpStatus.FORBIDDEN.value(), "只有商家可以查看订单统计");
         }
         

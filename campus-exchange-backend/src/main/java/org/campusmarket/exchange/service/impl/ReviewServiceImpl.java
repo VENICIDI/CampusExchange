@@ -15,6 +15,7 @@ import org.campusmarket.exchange.enums.ReviewStatusEnum;
 import org.campusmarket.exchange.exception.BusinessException;
 import org.campusmarket.exchange.mapper.*;
 import org.campusmarket.exchange.service.IPointsService;
+import org.campusmarket.exchange.service.IProductService;
 import org.campusmarket.exchange.service.IReviewService;
 import org.campusmarket.exchange.service.IWalletService;
 import org.springframework.http.HttpStatus;
@@ -61,6 +62,9 @@ public class ReviewServiceImpl implements IReviewService {
     
     @Resource
     private IPointsService pointsService;
+    
+    @Resource
+    private IProductService productService;
 
     /**
      * 提交商品评价和商家服务评价（买家评价）
@@ -161,56 +165,43 @@ public class ReviewServiceImpl implements IReviewService {
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
         if (shouldComplete) {
-        updateOrder.setStatus(OrderStatusEnum.COMPLETED);
-        updateOrder.setCompletionTime(LocalDateTime.now());
+            updateOrder.setStatus(OrderStatusEnum.COMPLETED);
+            updateOrder.setCompletionTime(LocalDateTime.now());
+            
+            // 订单完成时，将款项转入商家账户
+            try {
+                // 查询商家对应的用户ID
+                Merchant merchant = merchantMapper.selectById(order.getMerchantId());
+                if (merchant != null) {
+                    // 计算商家实际收入 = 订单总金额 - 平台佣金
+                    BigDecimal merchantIncome = order.getActualPaymentAmount().subtract(order.getPlatformCommissionAmount());
+                    
+                    if (merchantIncome.compareTo(BigDecimal.ZERO) > 0) {
+                        // 调用钱包服务转账给商家
+                        walletService.addOrderIncome(
+                            merchant.getUserId(),
+                            order.getId(),
+                            order.getOrderNo(),
+                            merchantIncome
+                        );
+                        
+                        log.info("订单完成：已将订单金额{}（扣除平台佣金{}）转入商家[用户ID:{}]钱包", 
+                            merchantIncome, order.getPlatformCommissionAmount(), merchant.getUserId());
+                    }
+                } else {
+                    log.error("找不到商家信息，无法转账，商家ID: {}", order.getMerchantId());
+                }
+            } catch (Exception e) {
+                log.error("处理商家收入失败：{}", e.getMessage(), e);
+                // 商家收入处理失败不影响订单流程
+            }
+            
+            // 更新商品销量和商家销量
+            updateProductSalesCount(order.getId());
         }
         updateOrder.setUpdateTime(LocalDateTime.now());
         
         orderMapper.updateById(updateOrder);
-        
-        // 9. 处理商家收入
-        // 修复重复转账问题：只在订单状态即将变为COMPLETED时执行一次转账
-        // 当订单从RECEIVED或RETURN_REJECTED状态转为COMPLETED状态时，需要进行转账
-        try {
-            // 检查订单状态是否即将变为已完成状态(COMPLETED)
-            boolean willBeCompleted = shouldComplete || (OrderStatusEnum.COMPLETED == updateOrder.getStatus());
-            // 检查订单之前是否已经完成(处于COMPLETED状态的订单不再转账)
-            boolean wasNotCompleted = OrderStatusEnum.COMPLETED != order.getStatus();
-            
-            // 只有即将变为COMPLETED状态且之前不是COMPLETED状态的订单才转账
-            if (willBeCompleted && wasNotCompleted) {
-            // 查询商家对应的用户ID
-            Merchant merchant = merchantMapper.selectById(order.getMerchantId());
-            if (merchant != null) {
-                // 计算商家实际收入 = 订单总金额 - 平台佣金
-                BigDecimal merchantIncome = order.getActualPaymentAmount().subtract(order.getPlatformCommissionAmount());
-                
-                if (merchantIncome.compareTo(BigDecimal.ZERO) > 0) {
-                    // 调用钱包服务转账给商家
-                    walletService.addOrderIncome(
-                        merchant.getUserId(),
-                        order.getId(),
-                        order.getOrderNo(),
-                        merchantIncome
-                    );
-                    
-                    log.info("已将订单金额{}（扣除平台佣金{}）转入商家[用户ID:{}]钱包", 
-                        merchantIncome, order.getPlatformCommissionAmount(), merchant.getUserId());
-                }
-            } else {
-                log.error("找不到商家信息，无法转账，商家ID: {}", order.getMerchantId());
-                }
-            } else {
-                if (!willBeCompleted) {
-                    log.info("订单[{}]尚未达到完成状态，暂不转账", order.getOrderNo());
-                } else {
-                    log.info("订单[{}]已完成状态，已执行过转账，不再重复转账", order.getOrderNo());
-                }
-            }
-        } catch (Exception e) {
-            log.error("处理商家收入失败：{}", e.getMessage(), e);
-            // 商家收入处理失败不影响评价流程
-        }
         
         log.info("用户[{}]评价订单[{}]成功", userId, orderReviewDTO.getOrderNo());
         return true;
@@ -297,6 +288,37 @@ public class ReviewServiceImpl implements IReviewService {
             updateOrder.setUpdateTime(LocalDateTime.now());
             
             orderMapper.updateById(updateOrder);
+            
+            // 订单完成时，将款项转入商家账户
+            try {
+                // 查询商家对应的用户ID
+                Merchant merchant = merchantMapper.selectById(order.getMerchantId());
+                if (merchant != null) {
+                    // 计算商家实际收入 = 订单总金额 - 平台佣金
+                    BigDecimal merchantIncome = order.getActualPaymentAmount().subtract(order.getPlatformCommissionAmount());
+                    
+                    if (merchantIncome.compareTo(BigDecimal.ZERO) > 0) {
+                        // 调用钱包服务转账给商家
+                        walletService.addOrderIncome(
+                            merchant.getUserId(),
+                            order.getId(),
+                            order.getOrderNo(),
+                            merchantIncome
+                        );
+                        
+                        log.info("订单完成：已将订单金额{}（扣除平台佣金{}）转入商家[用户ID:{}]钱包", 
+                            merchantIncome, order.getPlatformCommissionAmount(), merchant.getUserId());
+                    }
+                } else {
+                    log.error("找不到商家信息，无法转账，商家ID: {}", order.getMerchantId());
+                }
+            } catch (Exception e) {
+                log.error("处理商家收入失败：{}", e.getMessage(), e);
+                // 商家收入处理失败不影响订单流程
+            }
+            
+            // 更新商品销量和商家销量
+            updateProductSalesCount(order.getId());
             
             // 增加积分奖励（如果之前未增加过）
             try {
@@ -428,31 +450,7 @@ public class ReviewServiceImpl implements IReviewService {
         
         orderMapper.updateById(updateOrder);
         
-        // 增加积分奖励（如果之前未增加过）
-        try {
-            // 计算积分：每消费1元获得1积分
-            if (order.getActualPaymentAmount() != null) {
-                int points = order.getActualPaymentAmount().intValue();
-                
-                if (points > 0) {
-                    // 调用积分服务奖励用户积分
-                    pointsService.addPoints(
-                        order.getUserId(),
-                        points,
-                        PointsTransactionTypeEnum.PURCHASE_EARNED,
-                        "购物自动完成奖励: " + orderNo,
-                        order.getId()
-                    );
-                    
-                    log.info("用户[{}]自动完成订单[{}]奖励[{}]积分成功", order.getUserId(), orderNo, points);
-                }
-            }
-        } catch (Exception e) {
-            log.error("自动完成奖励用户积分出错: {}", e.getMessage(), e);
-            // 积分奖励失败不影响订单流程
-        }
-        
-        // 订单完成时转账到商家钱包（扣除平台佣金）
+        // 订单完成时，将款项转入商家账户
         try {
             // 查询商家对应的用户ID
             Merchant merchant = merchantMapper.selectById(order.getMerchantId());
@@ -476,8 +474,35 @@ public class ReviewServiceImpl implements IReviewService {
                 log.error("找不到商家信息，无法转账，商家ID: {}", order.getMerchantId());
             }
         } catch (Exception e) {
-            log.error("自动完成处理商家收入失败：{}", e.getMessage(), e);
+            log.error("处理商家收入失败：{}", e.getMessage(), e);
             // 商家收入处理失败不影响订单流程
+        }
+        
+        // 更新商品销量和商家销量
+        updateProductSalesCount(order.getId());
+        
+        // 增加积分奖励（如果之前未增加过）
+        try {
+            // 计算积分：每消费1元获得1积分
+            if (order.getActualPaymentAmount() != null) {
+                int points = order.getActualPaymentAmount().intValue();
+                
+                if (points > 0) {
+                    // 调用积分服务奖励用户积分
+                    pointsService.addPoints(
+                        order.getUserId(),
+                        points,
+                        PointsTransactionTypeEnum.PURCHASE_EARNED,
+                        "购物自动完成奖励: " + orderNo,
+                        order.getId()
+                    );
+                    
+                    log.info("用户[{}]自动完成订单[{}]奖励[{}]积分成功", order.getUserId(), orderNo, points);
+                }
+            }
+        } catch (Exception e) {
+            log.error("自动完成奖励用户积分出错: {}", e.getMessage(), e);
+            // 积分奖励失败不影响订单流程
         }
         
         log.info("自动完成订单[{}]成功", orderNo);
@@ -654,5 +679,33 @@ public class ReviewServiceImpl implements IReviewService {
                 .eq(BuyerReviewByMerchant::getMerchantId, merchantId);
         
         return buyerReviewByMerchantMapper.selectOne(reviewQuery);
+    }
+
+    /**
+     * 更新商品销量和商家销量（订单完成时调用）
+     * @param orderId 订单ID
+     */
+    private void updateProductSalesCount(Long orderId) {
+        try {
+            // 查询订单项
+            LambdaQueryWrapper<OrderItem> queryWrapper = Wrappers.<OrderItem>lambdaQuery()
+                    .eq(OrderItem::getOrderId, orderId);
+            List<OrderItem> orderItems = orderItemMapper.selectList(queryWrapper);
+            
+            if (orderItems == null || orderItems.isEmpty()) {
+                log.warn("更新商品销量失败: 订单[{}]不存在订单项", orderId);
+                return;
+            }
+            
+            // 遍历订单项更新销量
+            for (OrderItem item : orderItems) {
+                productService.updateSalesCount(item.getProductId(), item.getQuantity());
+            }
+            
+            log.info("订单[{}]商品销量更新成功", orderId);
+        } catch (Exception e) {
+            log.error("更新商品销量出错: {}", e.getMessage(), e);
+            // 销量更新失败不影响订单流程，记录日志即可
+        }
     }
 } 

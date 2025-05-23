@@ -39,7 +39,7 @@ import api from './index';
  *    }
  * 
  * 5. POST /api/wallet/wallet-pay - 使用钱包支付订单
- *    请求参数: { orderNo: "ORD123456", pointsUsed: 100 }
+ *    请求参数: { orderNo: "ORD123456" }
  *    响应格式: { code: 200, message: "success", data: { orderNo: "ORD123456", status: "PAID" } }
  * 
  * 6. POST /api/wallet/init - 初始化用户钱包
@@ -94,9 +94,8 @@ export const getWalletTransactionsAPI = (page = 1, size = 10, type = 'BALANCE') 
 /**
  * 使用钱包支付订单
  * @param {string} orderNo - 订单号
- * @param {number} pointsUsed - 使用的积分数量
  * @returns {Promise} 支付结果
  */
-export const payOrderWithWalletAPI = (orderNo, pointsUsed = 0) => {
-  return api.post('/wallet/wallet-pay', { orderNo, pointsUsed });
+export const payOrderWithWalletAPI = (orderNo) => {
+  return api.post('/wallet/wallet-pay', { orderNo });
 }; 

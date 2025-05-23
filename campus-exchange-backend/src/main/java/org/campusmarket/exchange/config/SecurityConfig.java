@@ -77,6 +77,9 @@ public class SecurityConfig {
     // SecurityFilterChain Bean 保持不变
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        // 添加日志，记录SecurityConfig初始化
+        System.out.println("正在配置SecurityFilterChain...");
+        
         http
                 .authorizeHttpRequests(authz -> authz
                         // 公共接口，允许匿名访问
@@ -87,6 +90,8 @@ public class SecurityConfig {
                         .requestMatchers("/api/products/**", "/api/categories/**", "/api/static/**").permitAll()
                         // 允许匿名访问商家相关API
                         .requestMatchers("/api/merchants/**").permitAll()
+                        // 允许访问买家信息API (商家和管理员可访问)
+                        .requestMatchers("/api/buyer-info/**").hasAnyRole("MERCHANT", "ADMIN")
                         // 文件上传相关API匿名访问
                         .requestMatchers("/api/upload/**", "/api/files/**").permitAll()
                         // 允许获取当前用户信息
@@ -111,9 +116,8 @@ public class SecurityConfig {
                 // 添加JWT过滤器
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
 
-        // 注意：通常不需要显式地将 provider 添加到 HttpSecurity 或 AuthenticationManagerBuilder
-        // Spring Boot 会自动检测并使用 ApplicationContext 中的 AuthenticationProvider Bean。
-
+        System.out.println("SecurityFilterChain配置完成，买家信息API权限设置为商家和管理员可访问");
+        
         return http.build();
     }
 

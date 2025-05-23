@@ -621,6 +621,12 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         detailVO.setUserName(user != null ? user.getUsername() : "未知用户");
         detailVO.setMerchantName(merchant != null ? merchant.getStoreName() : "未知商家");
         
+        // 设置买家信息链接URL
+        if (user != null) {
+            // 设置买家信息页面URL
+            detailVO.setBuyerInfoUrl("/api/buyer-info/" + user.getId());
+        }
+        
         // 5.1 补充商品详细信息
         if (orderItems != null && !orderItems.isEmpty()) {
             for (OrderItem item : orderItems) {
@@ -872,7 +878,26 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     "只有待付款订单才能支付，当前状态: " + order.getStatus().getDesc());
         }
         
-        // 3. 更新订单状态
+        // 3. 如果有使用积分，扣减用户积分
+        if (order.getPointsUsed() != null && order.getPointsUsed() > 0) {
+            log.info("订单使用了{}积分，准备扣减", order.getPointsUsed());
+            try {
+                // 扣减用户积分
+                pointsService.usePoints(
+                    userId, 
+                    order.getPointsUsed(),
+                    PointsTransactionTypeEnum.ORDER_DEDUCTION_USED,
+                    "订单抵扣：" + orderNo,
+                    order.getId()
+                );
+                log.info("积分扣减成功");
+            } catch (Exception e) {
+                log.error("积分扣减失败: {}", e.getMessage(), e);
+                throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "积分扣减失败: " + e.getMessage());
+            }
+        }
+        
+        // 4. 更新订单状态
         Order updateOrder = new Order();
         updateOrder.setId(order.getId());
         updateOrder.setStatus(OrderStatusEnum.PENDING_SHIPMENT);
@@ -883,9 +908,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         // 给用户奖励积分（每消费1元获得1积分）
         awardPointsForPurchase(order);
-        
-        // 更新商品销量
-        updateProductSalesCount(order.getId());
         
         log.info("订单支付成功");
         return true;
@@ -925,10 +947,31 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         
         orderMapper.updateById(updateOrder);
         
-        // 注意：确认收货时不进行转账，订单完成状态(COMPLETED)时才转账
-        // 确认收货只改变订单状态为RECEIVED，资金不变动
-        log.info("确认收货成功，订单状态已更新为已收货，等待评价或自动完成后将款项转入商家账户");
+        // 增加积分奖励
+        try {
+            // 计算积分：每消费1元获得1积分
+            if (order.getActualPaymentAmount() != null) {
+                int points = order.getActualPaymentAmount().intValue();
+                
+                if (points > 0) {
+                    // 调用积分服务奖励用户积分
+                    pointsService.addPoints(
+                        userId,
+                        points,
+                        PointsTransactionTypeEnum.PURCHASE_EARNED,
+                        "购物确认收货奖励: " + orderNo,
+                        order.getId()
+                    );
+                    
+                    log.info("用户[{}]确认收货奖励[{}]积分成功", userId, points);
+                }
+            }
+        } catch (Exception e) {
+            log.error("确认收货奖励积分失败：{}", e.getMessage(), e);
+            // 积分奖励失败不影响订单流程
+        }
         
+        log.info("确认收货成功，订单状态已更新为已收货");
         return true;
     }
 
@@ -1106,6 +1149,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
                     productService.increaseStock(item.getProductId(), item.getQuantity());
                     log.info("已恢复商品[{}]库存: {}", item.getProductId(), item.getQuantity());
                 }
+                
+                // 减少商品销量（如果已经增加了销量）
+                decreaseProductSalesCount(order.getId());
             }
         } else {
             // 拒绝退款
@@ -1310,9 +1356,6 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
         // 给用户奖励积分（每消费1元获得1积分）
         awardPointsForPurchase(order);
         
-        // 更新商品销量
-        updateProductSalesCount(order.getId());
-        
         return true;
     }
 
@@ -1348,7 +1391,7 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
     }
 
     /**
-     * 更新商品销量
+     * 更新商品销量和商家销量（订单完成时调用）
      * @param orderId 订单ID
      */
     private void updateProductSalesCount(Long orderId) {
@@ -1371,6 +1414,34 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             log.info("订单[{}]商品销量更新成功", orderId);
         } catch (Exception e) {
             log.error("更新商品销量出错: {}", e.getMessage(), e);
+            // 销量更新失败不影响订单流程，记录日志即可
+        }
+    }
+
+    /**
+     * 减少商品销量和商家销量（退款时调用）
+     * @param orderId 订单ID
+     */
+    private void decreaseProductSalesCount(Long orderId) {
+        try {
+            // 查询订单项
+            LambdaQueryWrapper<OrderItem> queryWrapper = Wrappers.<OrderItem>lambdaQuery()
+                    .eq(OrderItem::getOrderId, orderId);
+            List<OrderItem> orderItems = orderItemMapper.selectList(queryWrapper);
+            
+            if (orderItems == null || orderItems.isEmpty()) {
+                log.warn("减少商品销量失败: 订单[{}]不存在订单项", orderId);
+                return;
+            }
+            
+            // 遍历订单项减少销量
+            for (OrderItem item : orderItems) {
+                productService.decreaseSalesCount(item.getProductId(), item.getQuantity());
+            }
+            
+            log.info("订单[{}]商品销量减少成功", orderId);
+        } catch (Exception e) {
+            log.error("减少商品销量出错: {}", e.getMessage(), e);
             // 销量更新失败不影响订单流程，记录日志即可
         }
     }
@@ -1504,6 +1575,9 @@ public class OrderServiceImpl extends ServiceImpl<OrderMapper, Order> implements
             productService.increaseStock(item.getProductId(), item.getQuantity());
             log.info("已恢复商品[{}]库存: {}", item.getProductId(), item.getQuantity());
         }
+        
+        // 减少商品销量（如果已经增加了销量）
+        decreaseProductSalesCount(order.getId());
         
         log.info("确认收到退货成功");
         return true;

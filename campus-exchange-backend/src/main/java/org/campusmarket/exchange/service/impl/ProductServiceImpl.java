@@ -679,10 +679,53 @@ public class ProductServiceImpl extends ServiceImpl<ProductMapper, Product> impl
     }
 
     /**
+     * 减少商品销量（用于退款）
+     * @param productId 商品ID
+     * @param quantity 减少的销售数量
+     * @return 是否成功
+     */
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean decreaseSalesCount(Long productId, Integer quantity) {
+        log.info("减少商品销量: {} - {}", productId, quantity);
+        
+        // 查询商品
+        Product product = getById(productId);
+        if (product == null) {
+            log.warn("减少销量失败: 商品不存在");
+            return false;
+        }
+        
+        // 计算新销量，确保不小于0
+        Integer currentSales = product.getSales() == null ? 0 : product.getSales();
+        Integer newSales = Math.max(0, currentSales - quantity);
+        
+        // 更新销量
+        Product updateProduct = new Product();
+        updateProduct.setId(productId);
+        updateProduct.setSales(newSales);
+        updateProduct.setUpdateTime(LocalDateTime.now());
+        
+        boolean updated = updateById(updateProduct);
+        
+        if (updated) {
+            log.info("商品销量减少成功, 新销量: {}", newSales);
+            
+            // 更新商家总销量和销售额（负值表示减少）
+            updateMerchantTotalSales(product.getMerchantId(), -quantity, 
+                product.getCurrentPrice().multiply(new BigDecimal(quantity)).negate());
+        } else {
+            log.warn("商品销量减少失败");
+        }
+        
+        return updated;
+    }
+
+    /**
      * 更新商家总销量和销售额
      * @param merchantId 商家ID
-     * @param quantityDelta 销量变化值
-     * @param amountDelta 销售额变化值
+     * @param quantityDelta 销量变化值（正值增加，负值减少）
+     * @param amountDelta 销售额变化值（正值增加，负值减少）
      * @return 是否成功
      */
     private boolean updateMerchantTotalSales(Long merchantId, Integer quantityDelta, BigDecimal amountDelta) {

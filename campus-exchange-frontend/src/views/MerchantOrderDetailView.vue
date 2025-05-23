@@ -127,11 +127,17 @@
                 <h5 class="mb-0"><i class="fas fa-user me-2"></i>买家信息</h5>
               </div>
               <div class="card-body">
-                <div class="buyer-info-item">
+                <div class="buyer-info-item mb-3">
                   <div class="info-label">买家用户名:</div>
-                  <div class="info-value">{{ order.userName || '未知用户' }}</div>
+                  <div class="info-value">
+                    <a href="javascript:;" @click="viewBuyerInfo" class="buyer-name-link">
+                      {{ order.userName || '未知用户' }}
+                    </a>
+                  </div>
                 </div>
-                <!-- 更多买家信息可在此添加 -->
+                <div class="buyer-actions">
+                  <!-- 移除查看买家评价信息按钮 -->
+                </div>
               </div>
             </div>
 
@@ -142,13 +148,13 @@
               </div>
               <div class="card-body">
                 <div class="price-details">
-                  <div class="d-flex justify-content-between mb-2">
+                  <div v-if="order.showTotalProductAmount" class="d-flex justify-content-between mb-2">
                     <span class="info-label">商品总额：</span>
                     <span>¥{{ productTotalAmount }}</span>
                   </div>
-                  <div class="d-flex justify-content-between mb-2">
-                    <span class="info-label">运费：</span>
-                    <span>¥{{ order.shippingFee || 0 }}</span>
+                  <div v-if="order.showPointsDeduction && order.pointsDeductionAmount > 0" class="d-flex justify-content-between mb-2">
+                    <span class="info-label">积分抵扣：</span>
+                    <span>-¥{{ order.pointsDeductionAmount || 0 }}</span>
                   </div>
                   <div class="d-flex justify-content-between mb-2">
                     <span class="info-label">平台服务费：</span>
@@ -819,6 +825,41 @@ const showReturnDialog = (approve) => {
   isApproveReturn.value = approve;
   returnDialogVisible.value = true;
 };
+
+// 查看买家信息详情
+const viewBuyerInfo = () => {
+  // 检查订单中的用户ID
+  if (order.value?.userId) {
+    // 保存身份信息到localStorage，确保跳转后的页面能获取到
+    try {
+      // 检查用户信息是否存在
+      const userJson = localStorage.getItem('user');
+      if (userJson) {
+        const userData = JSON.parse(userJson);
+        if (userData && userData.role === 'MERCHANT') {
+          console.log('商家身份确认，准备跳转查看买家信息');
+        }
+      }
+      
+      // 存储当前商家ID，供下一个页面使用
+      if (order.value.merchantId) {
+        localStorage.setItem('currentViewingMerchantId', order.value.merchantId);
+      }
+      
+      // 添加访问时间戳
+      localStorage.setItem('buyerInfoAccessTime', new Date().getTime());
+      
+      // 导航到买家信息页
+      const buyerId = order.value.userId;
+      router.push(`/buyer-info/${buyerId}`);
+    } catch (err) {
+      console.error('准备跳转查看买家信息时出错:', err);
+      ElMessage.error('无法查看买家信息，请确认登录状态');
+    }
+  } else {
+    ElMessage.warning('找不到买家信息');
+  }
+};
 </script>
 
 <style scoped>
@@ -1232,5 +1273,17 @@ const showReturnDialog = (approve) => {
 .product-review-item:last-child {
   border-bottom: none;
   margin-bottom: 0;
+}
+
+.buyer-name-link {
+  color: #4568dc;
+  text-decoration: none;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.buyer-name-link:hover {
+  color: #2c4bb3;
+  text-decoration: underline;
 }
 </style> 

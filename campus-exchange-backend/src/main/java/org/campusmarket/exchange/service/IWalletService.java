@@ -54,10 +54,9 @@ public interface IWalletService {
      * 使用钱包支付订单
      * @param userId 用户ID
      * @param orderNo 订单号
-     * @param pointsUsed 使用的积分数量
-     * @return 支付是否成功
+     * @return 是否成功
      */
-    boolean payOrder(Long userId, String orderNo, Integer pointsUsed);
+    boolean payOrder(Long userId, String orderNo);
     
     /**
      * 增加用户积分
@@ -94,4 +93,14 @@ public interface IWalletService {
      * @return 是否成功
      */
     boolean refundToBuyer(Long userId, Long orderId, String orderNo, BigDecimal amount);
+    
+    /**
+     * 从商家钱包中扣除退款金额
+     * @param merchantUserId 商家对应的用户ID
+     * @param orderId 订单ID
+     * @param orderNo 订单编号
+     * @param amount 扣除金额
+     * @return 是否成功
+     */
+    boolean deductFromMerchant(Long merchantUserId, Long orderId, String orderNo, BigDecimal amount);
 } 

@@ -186,7 +186,7 @@ public class WalletServiceImpl implements IWalletService {
     
     @Override
     @Transactional
-    public boolean payOrder(Long userId, String orderNo, Integer pointsUsed) {
+    public boolean payOrder(Long userId, String orderNo) {
         if (userId == null) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "用户ID不能为空");
         }
@@ -194,9 +194,6 @@ public class WalletServiceImpl implements IWalletService {
         if (orderNo == null || orderNo.trim().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "订单号不能为空");
         }
-        
-        // 默认使用0积分
-        int points = pointsUsed != null ? pointsUsed : 0;
         
         // 获取订单信息
         LambdaQueryWrapper<Order> orderQueryWrapper = new LambdaQueryWrapper<>();
@@ -216,14 +213,12 @@ public class WalletServiceImpl implements IWalletService {
         // 获取用户钱包
         Wallet wallet = getWalletByUserId(userId);
         
-        // 计算积分抵扣金额（假设100积分=1元）
-        BigDecimal pointsDiscount = BigDecimal.valueOf(points / 100.0);
+        // 从订单中获取积分抵扣信息
+        Integer pointsUsed = order.getPointsUsed() != null ? order.getPointsUsed() : 0;
+        BigDecimal pointsDeduction = order.getPointsDeductionAmount() != null ? order.getPointsDeductionAmount() : BigDecimal.ZERO;
         
-        // 计算实际支付金额
-        BigDecimal actualPayAmount = order.getActualPaymentAmount().subtract(pointsDiscount);
-        if (actualPayAmount.compareTo(BigDecimal.ZERO) < 0) {
-            actualPayAmount = BigDecimal.ZERO;
-        }
+        // 计算实际支付金额，已包含积分抵扣
+        BigDecimal actualPayAmount = order.getActualPaymentAmount();
         
         // 检查钱包余额是否足够
         if (wallet.getBalance().compareTo(actualPayAmount) < 0) {
@@ -231,16 +226,16 @@ public class WalletServiceImpl implements IWalletService {
         }
         
         // 如果使用了积分，检查积分是否足够并扣减
-        if (points > 0) {
+        if (pointsUsed > 0) {
             PointsAccount pointsAccount = pointsService.getPointsAccountByUserId(userId);
-            if (pointsAccount.getTotalPoints() < points) {
+            if (pointsAccount.getTotalPoints() < pointsUsed) {
                 throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "积分不足");
             }
             
             // 使用积分
             pointsService.usePoints(
                 userId, 
-                points, 
+                pointsUsed, 
                 PointsTransactionTypeEnum.ORDER_DEDUCTION_USED, 
                 "订单抵扣: " + orderNo, 
                 order.getId()
@@ -271,9 +266,9 @@ public class WalletServiceImpl implements IWalletService {
         order.setPaymentTime(LocalDateTime.now());
         order.setUpdateTime(LocalDateTime.now());
         // 处理积分抵扣
-        if (points > 0) {
-            order.setPointsUsed(points);
-            order.setPointsDeductionAmount(pointsDiscount);
+        if (pointsUsed > 0) {
+            order.setPointsUsed(pointsUsed);
+            order.setPointsDeductionAmount(pointsDeduction);
         }
         
         orderMapper.updateById(order);
@@ -388,6 +383,51 @@ public class WalletServiceImpl implements IWalletService {
         walletTransactionMapper.insert(transaction);
         
         log.info("用户[{}]收到订单[{}]退款: {}", userId, orderNo, amount);
+        return true;
+    }
+    
+    @Override
+    @Transactional
+    public boolean deductFromMerchant(Long merchantUserId, Long orderId, String orderNo, BigDecimal amount) {
+        if (merchantUserId == null) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "商家用户ID不能为空");
+        }
+        
+        if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
+            throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "扣款金额必须大于0");
+        }
+        
+        // 获取商家钱包
+        Wallet wallet = getWalletByUserId(merchantUserId);
+        
+        // 检查余额是否足够
+        if (wallet.getBalance().compareTo(amount) < 0) {
+            log.error("商家[{}]钱包余额不足，无法扣款，当前余额: {}, 需扣款: {}", 
+                    merchantUserId, wallet.getBalance(), amount);
+            // 依然继续处理，允许商家余额为负，平台承担风险
+            // 实际业务中可能需要更严格的处理，此处简化处理
+        }
+        
+        // 更新钱包余额
+        BigDecimal newBalance = wallet.getBalance().subtract(amount);
+        wallet.setBalance(newBalance);
+        wallet.setUpdateTime(LocalDateTime.now());
+        
+        walletMapper.updateById(wallet);
+        
+        // 记录交易
+        WalletTransaction transaction = new WalletTransaction();
+        transaction.setWalletId(wallet.getId());
+        transaction.setRelatedOrderId(orderId);
+        transaction.setAmount(amount.negate()); // 扣款是负数
+        transaction.setType(WalletTransactionTypeEnum.REFUND.getCode());
+        transaction.setDescription("订单退款支出: " + orderNo);
+        transaction.setBalanceAfterTransaction(newBalance);
+        transaction.setCreateTime(LocalDateTime.now());
+        
+        walletTransactionMapper.insert(transaction);
+        
+        log.info("商家[{}]订单[{}]退款支出: {}", merchantUserId, orderNo, amount);
         return true;
     }
 } 

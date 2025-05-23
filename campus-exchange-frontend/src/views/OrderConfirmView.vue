@@ -199,29 +199,27 @@
               <span class="payment-label">运费</span>
               <span class="payment-value">¥{{ isOfflineTrade ? '0.00' : shippingFee.toFixed(2) }}</span>
             </div>
-            <!-- 添加积分抵扣选项 -->
-            <div class="payment-item points-section">
-              <span class="payment-label">
-                <span class="points-toggle" @click="usePoints = !usePoints">
-                  <span class="toggle-icon">{{ usePoints ? '✓' : '' }}</span>
-                  积分抵扣
-                </span>
-              </span>
-              <span class="payment-value" v-if="usePoints">
-                <el-slider 
-                  v-model="pointsUsed" 
-                  :min="0" 
-                  :max="maxUsablePoints" 
-                  :step="100"
-                  show-input
-                  :disabled="userPoints <= 0"
-                ></el-slider>
-                -¥{{ pointsDeduction.toFixed(2) }}
-                <span class="points-info">(使用{{ pointsUsed }}积分)</span>
-              </span>
-              <span class="payment-value" v-else>
-                <span class="points-info">{{ userPoints > 0 ? `可用${userPoints}积分` : '无可用积分' }}</span>
-              </span>
+            <!-- 积分抵扣选项 -->
+            <div class="points-section" v-if="userPoints > 0">
+              <div class="points-title-row">
+                <span class="section-title">积分抵扣</span>
+                <span class="user-points">当前可用积分: {{ userPoints }}</span>
+              </div>
+              <div class="points-control">
+                <el-checkbox v-model="usePoints" @change="handlePointsChange">使用积分</el-checkbox>
+                <div class="points-input-group" v-if="usePoints">
+                  <el-input-number 
+                    v-model="pointsUsed" 
+                    :min="1" 
+                    :max="maxAvailablePoints"
+                    size="small"
+                    @change="checkPointsLimit"
+                  />
+                  <span class="points-hint">
+                    最多可用 {{ maxAvailablePoints }} 积分，抵扣 ¥{{ (maxAvailablePoints / 100).toFixed(2) }}
+                  </span>
+                </div>
+              </div>
             </div>
             <div class="payment-total">
               <span class="total-label">实付金额</span>
@@ -348,7 +346,7 @@ const serviceFee = ref(0); // 平台服务费
 const usePoints = ref(false);
 const pointsUsed = ref(0);
 const userPoints = ref(0);
-const maxUsablePoints = computed(() => {
+const maxAvailablePoints = computed(() => {
   // 计算订单总金额
   let orderAmount = 0;
   if (cartItems.value.length > 0) {
@@ -363,6 +361,23 @@ const maxUsablePoints = computed(() => {
   const maxPoints = Math.floor(orderAmount * 100);
   return Math.min(userPoints.value, maxPoints);
 });
+
+// 检查积分使用限制
+const checkPointsLimit = () => {
+  if (pointsUsed.value > maxAvailablePoints.value) {
+    pointsUsed.value = maxAvailablePoints.value;
+  }
+};
+
+// 处理积分勾选变化
+const handlePointsChange = (val) => {
+  if (val) {
+    // 默认使用最大可用积分
+    pointsUsed.value = maxAvailablePoints.value;
+  } else {
+    pointsUsed.value = 0;
+  }
+};
 
 // 计算积分抵扣金额（100积分=1元）
 const pointsDeduction = computed(() => {
@@ -1452,5 +1467,37 @@ onMounted(() => {
   color: #333;
   font-size: 14px;
   font-weight: 500;
+}
+
+.points-section {
+  margin-top: 5px;
+  padding: 8px 0;
+  border-top: 1px dashed #eee;
+}
+
+.points-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 5px;
+}
+
+.points-control {
+  display: flex;
+  align-items: center;
+}
+
+.points-input-group {
+  margin-left: 10px;
+}
+
+.points-hint {
+  font-size: 12px;
+  color: #888;
+}
+
+.user-points {
+  font-size: 14px;
+  color: #666;
 }
 </style> 

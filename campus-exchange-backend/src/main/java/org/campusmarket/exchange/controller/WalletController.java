@@ -184,13 +184,12 @@ public class WalletController {
         }
         
         String orderNo = paymentDTO.getOrderNo();
-        Integer pointsUsed = paymentDTO.getPointsUsed();
         
         if (orderNo == null || orderNo.trim().isEmpty()) {
             throw new BusinessException(HttpStatus.BAD_REQUEST.value(), "订单号不能为空");
         }
         
-        boolean success = walletService.payOrder(userId, orderNo, pointsUsed != null ? pointsUsed : 0);
+        boolean success = walletService.payOrder(userId, orderNo);
         
         Map<String, Object> result = new HashMap<>();
         result.put("orderNo", orderNo);
@@ -212,6 +211,5 @@ public class WalletController {
     @Data
     public static class WalletPaymentDTO {
         private String orderNo;
-        private Integer pointsUsed;
     }
 } 

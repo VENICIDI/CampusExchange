@@ -109,12 +109,20 @@ public interface IProductService {
     boolean increaseStock(Long productId, Integer quantity);
     
     /**
-     * 更新商品销量
+     * 更新商品销量（增加销量）
      * @param productId 商品ID
      * @param quantity 销售数量
      * @return 是否成功
      */
     boolean updateSalesCount(Long productId, Integer quantity);
+    
+    /**
+     * 更新商品销量（减少销量，用于退款）
+     * @param productId 商品ID
+     * @param quantity 退款数量
+     * @return 是否成功
+     */
+    boolean decreaseSalesCount(Long productId, Integer quantity);
 
     /**
      * 统计所有商品数量

@@ -20,34 +20,15 @@ const wallet = ref({
 
 // 支付选项
 const paymentMethod = ref('WALLET'); // WALLET, ALIPAY, WECHAT
-const usePoints = ref(0);
 
 // 倒计时
 const countdown = ref(0);
 let timer = null;
 
 // 计算属性
-const maxUsablePoints = computed(() => {
-  if (!order.value || !order.value.actualPaymentAmount) return 0;
-  // 最多可用的积分：订单金额*100与用户积分取较小值
-  return Math.min(
-    wallet.value.points || 0, 
-    Math.floor(order.value.actualPaymentAmount * 100)
-  );
-});
-
-const pointsDiscount = computed(() => {
-  // 实际抵扣金额
-  return (Math.floor(usePoints.value / 100) || 0).toFixed(2);
-});
-
-const finalPayAmount = computed(() => {
-  if (!order.value || !order.value.actualPaymentAmount) return 0;
-  return (order.value.actualPaymentAmount - parseFloat(pointsDiscount.value)).toFixed(2);
-});
-
 const walletEnough = computed(() => {
-  return (wallet.value.balance || 0) >= parseFloat(finalPayAmount.value);
+  if (!order.value || !order.value.actualPaymentAmount) return false;
+  return (wallet.value.balance || 0) >= parseFloat(order.value.actualPaymentAmount);
 });
 
 const countdownText = computed(() => {
@@ -146,7 +127,7 @@ const handlePayment = async () => {
     submitting.value = true;
     
     await ElMessageBox.confirm(
-      `确认支付订单 ${orderNo.value}？金额: ¥${finalPayAmount.value}`, 
+      `确认支付订单 ${orderNo.value}？金额: ¥${order.value.actualPaymentAmount}`, 
       '确认支付', 
       { confirmButtonText: '确认', cancelButtonText: '取消', type: 'info' }
     );
@@ -156,7 +137,7 @@ const handlePayment = async () => {
       
       if (paymentMethod.value === 'WALLET') {
         // 使用钱包支付
-        response = await payOrderWithWalletAPI(orderNo.value, usePoints.value);
+        response = await payOrderWithWalletAPI(orderNo.value);
       } else {
         // 使用其他支付方式
         response = await orderApi.payOrder(orderNo.value);
@@ -261,26 +242,16 @@ onUnmounted(() => {
               <span class="value">¥{{ order?.actualPaymentAmount?.toFixed(2) }}</span>
             </div>
             
-            <div v-if="wallet.points > 0" class="amount-row">
+            <div v-if="order?.pointsUsed > 0" class="amount-row">
               <span class="label">使用积分：</span>
-              <div class="points-input">
-                <input 
-                  v-model.number="usePoints" 
-                  type="number" 
-                  :min="0" 
-                  :max="maxUsablePoints" 
-                  :step="100"
-                  :disabled="paymentMethod !== 'WALLET'"
-                />
-                <span class="points-info">
-                  可用积分：{{ maxUsablePoints }}（已抵扣 ¥{{ pointsDiscount }}）
-                </span>
+              <div class="points-info">
+                <span>{{ order.pointsUsed }} (已抵扣 ¥{{ order.pointsDeductionAmount?.toFixed(2) }})</span>
               </div>
             </div>
             
             <div class="amount-row final-amount">
               <span class="label">应付金额：</span>
-              <span class="value">¥{{ finalPayAmount }}</span>
+              <span class="value">¥{{ order?.actualPaymentAmount?.toFixed(2) }}</span>
             </div>
           </div>
         </div>
@@ -465,18 +436,6 @@ onUnmounted(() => {
 .value {
   font-weight: 500;
   color: #333;
-}
-
-.points-input {
-  display: flex;
-  align-items: center;
-}
-
-.points-input input {
-  width: 100px;
-  padding: 5px 10px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
 }
 
 .points-info {

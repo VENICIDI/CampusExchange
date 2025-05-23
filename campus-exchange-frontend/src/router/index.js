@@ -14,6 +14,7 @@ import MerchantOrdersView from '../views/MerchantOrdersView.vue'
 import MerchantOrderDetailView from '@/views/MerchantOrderDetailView.vue'
 import WalletView from '../views/WalletView.vue'
 import PaymentView from '../views/PaymentView.vue'
+import BuyerInfoView from '../views/BuyerInfoView.vue'
 
 import CartView from '../views/CartView.vue'
 
@@ -159,6 +160,12 @@ const router = createRouter({
       name: 'payment',
       component: PaymentView,
       meta: { requiresAuth: true }
+    },
+    {
+      path: '/buyer-info/:buyerId',
+      name: 'buyer-info',
+      component: BuyerInfoView,
+      meta: { requiresAuth: true, roles: ['MERCHANT'] } // 仅商家可查看
     },
     // 添加管理员专属路由
     {

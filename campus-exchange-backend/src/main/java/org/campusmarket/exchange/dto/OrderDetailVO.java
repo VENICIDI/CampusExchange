@@ -151,6 +151,24 @@ public class OrderDetailVO {
     private OrderAddressVO orderAddress;
     
     /**
+     * 买家可访问链接
+     * 用于跳转至买家信息详情页面
+     */
+    private String buyerInfoUrl;
+    
+    /**
+     * 是否展示商品总额
+     * 默认为false，商家端不展示
+     */
+    private Boolean showTotalProductAmount = false;
+    
+    /**
+     * 是否展示积分抵扣
+     * 默认为false，商家端不展示
+     */
+    private Boolean showPointsDeduction = false;
+    
+    /**
      * 收货地址VO
      */
     @Data
