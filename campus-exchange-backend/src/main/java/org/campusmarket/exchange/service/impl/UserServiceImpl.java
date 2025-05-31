@@ -46,14 +46,13 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
     @Resource
     private MerchantMapper merchantMapper;
 
-    // --- 2. 在注入 PasswordEncoder 时添加 @Lazy ---
+
     @Lazy
-    @Resource // 或者 @Autowired
+    @Resource 
     private PasswordEncoder passwordEncoder;
-    // --- 修改结束 ---
 
     @Resource
-    private ICaptchaService captchaService; // 假设 ICaptchaService 不依赖 SecurityConfig 中的 Bean
+    private ICaptchaService captchaService; 
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -87,7 +86,7 @@ public class UserServiceImpl implements IUserService, UserDetailsService {
             User user = new User();
             BeanUtils.copyProperties(registerDTO, user);
 
-            // 密码加密 (此时会触发 @Lazy 加载 PasswordEncoder)
+            // 密码加密 (此时触发 @Lazy 加载 PasswordEncoder)
             try {
                 System.out.println("开始加密密码");
                 user.setPassword(passwordEncoder.encode(registerDTO.getPassword()));

@@ -1,13 +1,11 @@
-// 文件路径: ...\src\main\java\org\campusmarket\exchange\config\SecurityConfig.java
 package org.campusmarket.exchange.config;
 
-// --- 新增或确保存在的导入 ---
-import jakarta.annotation.Resource; // 如果使用 @Resource
-// import org.springframework.beans.factory.annotation.Autowired; // 或者使用 @Autowired
+import jakarta.annotation.Resource; 
+// import org.springframework.beans.factory.annotation.Autowired; 
 import org.campusmarket.exchange.filter.JwtAuthenticationFilter;
 import org.springframework.security.authentication.AuthenticationProvider;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
-import org.springframework.security.core.userdetails.UserDetailsService; // 需要注入 UserServiceImpl
+import org.springframework.security.core.userdetails.UserDetailsService; 
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 // --- 导入结束 ---
 
@@ -125,7 +123,6 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        // 确保这个地址是你前端开发服务器的地址
         configuration.setAllowedOrigins(Arrays.asList("http://localhost:5173"));
         configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         // 建议允许所有常用头，或者至少包括 Content-Type 和 Authorization (如果未来使用)

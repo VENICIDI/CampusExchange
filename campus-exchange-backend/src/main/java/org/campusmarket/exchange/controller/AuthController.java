@@ -1,19 +1,19 @@
-// 文件路径: ...\src\main\java\org\campusmarket\exchange\controller\AuthController.java
 package org.campusmarket.exchange.controller;
 
 import jakarta.annotation.Resource;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
+import org.campusmarket.exchange.config.JwtConfig;
 import org.campusmarket.exchange.dto.LoginRequestDTO;
 import org.campusmarket.exchange.dto.LoginResponseDTO;
 import org.campusmarket.exchange.dto.Result;
+import org.campusmarket.exchange.dto.UserDTO;
 import org.campusmarket.exchange.dto.UserRegisterDTO;
 import org.campusmarket.exchange.entity.User;
-// --- 确保导入 BusinessException ---
 import org.campusmarket.exchange.exception.BusinessException;
-// --- 导入结束 ---
 import org.campusmarket.exchange.service.ICaptchaService;
 import org.campusmarket.exchange.service.IUserService;
+import org.campusmarket.exchange.util.JwtUtils;
 import org.springframework.http.HttpStatus; // 导入 HttpStatus (如果需要更精细控制)
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.BadCredentialsException;
@@ -45,6 +45,12 @@ public class AuthController {
 
     @Resource
     private AuthenticationManager authenticationManager;
+    
+    @Resource
+    private JwtUtils jwtUtils;
+    
+    @Resource
+    private JwtConfig jwtConfig;
 
     /**
      * 用户注册接口
@@ -144,16 +150,36 @@ public class AuthController {
             throw new BusinessException(HttpStatus.INTERNAL_SERVER_ERROR.value(), "系统错误：无法获取用户信息");
         }
 
-        LoginResponseDTO response = new LoginResponseDTO();
-        response.setUserId(user.getId()); // 设置用户ID
-        response.setUsername(username);
-        response.setAvatar(user.getAvatar()); // 设置头像
-        
+        // 提取角色
         String role = authentication.getAuthorities().stream()
                 .findFirst()
                 .map(authority -> authority.getAuthority().replace("ROLE_", ""))
                 .orElse("USER");
+                
+        // 创建用户DTO用于生成令牌
+        UserDTO userDTO = new UserDTO();
+        userDTO.setId(user.getId());
+        userDTO.setUsername(username);
+        
+        // 将角色字符串转换为数值
+        Integer roleValue = 0; // 默认USER
+        if ("MERCHANT".equals(role)) {
+            roleValue = 1;
+        } else if ("ADMIN".equals(role)) {
+            roleValue = 2;
+        }
+        userDTO.setRole(roleValue);
+        
+        // 生成JWT令牌
+        String token = jwtUtils.generateToken(userDTO);
+        
+        // 构建响应对象
+        LoginResponseDTO response = new LoginResponseDTO();
+        response.setUserId(user.getId()); // 设置用户ID
+        response.setUsername(username);
+        response.setAvatar(user.getAvatar()); // 设置头像
         response.setRole(role);
+        response.setToken(token); // 设置JWT令牌
 
         System.out.println("登录成功: username=" + username + ", userId=" + user.getId() + ", role=" + role);
         // 认证成功，返回 200 OK

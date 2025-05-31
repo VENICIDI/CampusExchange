@@ -9,5 +9,3 @@ export function getDashboardStats() {
     method: 'get'
   })
 }
-
-// 后续可以在这里添加其他管理员相关API 

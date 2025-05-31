@@ -1,4 +1,3 @@
-// 文件路径: ...\src\main\java\org\campusmarket\exchange\config\KaptchaConfig.java
 package org.campusmarket.exchange.config;
 
 import com.google.code.kaptcha.Producer;
@@ -28,9 +27,9 @@ public class KaptchaConfig {
         properties.setProperty("kaptcha.image.height", "60");
         // 验证码文本字符大小，默认为 40
         properties.setProperty("kaptcha.textproducer.font.size", "38");
-        // Session Key (我们不用 session，但 Kaptcha 需要这个配置)
+        // Session Key 
         properties.setProperty("kaptcha.session.key", "kaptchaCode");
-        // 验证码文本字符长度，默认为 5
+        // 验证码文本字符长度，默认为
         properties.setProperty("kaptcha.textproducer.char.length", "4");
         // 验证码文本字体样式，默认为 Arial, Courier
         properties.setProperty("kaptcha.textproducer.font.names", "Arial,Courier");

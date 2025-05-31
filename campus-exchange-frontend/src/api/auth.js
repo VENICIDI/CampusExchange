@@ -7,7 +7,7 @@ export const captchaApi = {
     console.log('请求验证码ID');
     return api.get('/auth/captcha')
       .then(response => {
-        console.log('验证码接口原始响应:', response);
+        console.log( '验证码接口原始响应:', response);
         // 确保返回标准格式数据
         if (response.data) {
           console.log('验证码接口处理后响应:', response.data);
@@ -24,7 +24,6 @@ export const captchaApi = {
           console.error('错误状态码:', error.response.status);
           console.error('错误数据:', error.response.data);
         }
-        
         // 在开发环境中提供模拟数据以便测试
         if (process.env.NODE_ENV === 'development') {
           console.warn('使用模拟验证码数据 (仅用于开发环境)');
@@ -95,7 +94,6 @@ export const authApi = {
       .catch(error => {
         console.error('登录请求失败:', error);
         
-        // 增强错误信息
         if (error.response && error.response.data) {
           console.error('服务器返回错误:', error.response.data);
           // 直接从后端响应中获取错误信息和代码

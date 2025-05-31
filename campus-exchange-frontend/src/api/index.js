@@ -10,9 +10,9 @@ import * as adminMerchant from './adminMerchant'
 
 // 创建axios实例
 const api = axios.create({
-  baseURL: '/api', // 使用相对路径，避免跨域问题
-  timeout: 15000, // 增加超时时间
-  withCredentials: false // 禁用跨域请求携带凭证，避免CORS问题
+  baseURL: '/api', 
+  timeout: 15000, 
+  withCredentials: false 
 });
 
 // 请求拦截器
@@ -21,7 +21,7 @@ api.interceptors.request.use(
     // 记录请求开始时间，用于计算请求耗时
     config.metadata = { startTime: new Date() };
     
-    // 记录请求详情（排除敏感信息）
+    // 记录请求详情（
     console.log(`请求 ${config.method.toUpperCase()} ${config.url}`, {
       url: config.url,
       method: config.method,
@@ -37,11 +37,11 @@ api.interceptors.request.use(
     if (user) {
       try {
         const userData = JSON.parse(user);
-        // 如果有token，添加到Authorization头
+        // 有token，添加到Authorization头
         if (userData.token && config.headers) {
           config.headers['Authorization'] = `Bearer ${userData.token}`;
         }
-        // 即使没有token，仍添加用户ID到请求头以便后端识别用户
+        // 没有token，仍添加用户ID到请求头以便后端识别用户
         if (userData.userId && userData.userId > 0) {
           config.headers['X-User-Id'] = userData.userId;
           config.headers['X-User-Name'] = userData.username || '';

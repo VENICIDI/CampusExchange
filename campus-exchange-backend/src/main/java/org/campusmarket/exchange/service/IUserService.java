@@ -1,4 +1,3 @@
-// 文件路径: ...\src\main\java\org\campusmarket\exchange\service\IUserService.java
 package org.campusmarket.exchange.service;
 
 // 暂时不使用IService，避免可能的问题

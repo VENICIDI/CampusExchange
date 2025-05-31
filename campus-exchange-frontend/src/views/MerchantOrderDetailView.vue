@@ -136,7 +136,6 @@
                   </div>
                 </div>
                 <div class="buyer-actions">
-                  <!-- 移除查看买家评价信息按钮 -->
                 </div>
               </div>
             </div>
